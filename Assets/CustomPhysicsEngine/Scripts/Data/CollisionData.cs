@@ -11,13 +11,13 @@ namespace Phys
         public float Penetration;
     }
 
-    public struct FManifold
+    public class Manifold
     {
         public static readonly int MAX_CONTACTS = 2;
 
-        FContact[] Contacts;
-        PhysCollider A;
-        PhysCollider B;
+        public FContact[] Contacts;
+        public PhysCollider A;
+        public PhysCollider B;
     }
 }
 

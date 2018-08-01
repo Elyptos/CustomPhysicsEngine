@@ -8,7 +8,6 @@ namespace Phys
     public struct FCollPoly
     {
         public Vector2[] Vertices;
-        public int[] Indices;
 
         public Vector2 Center
         {
@@ -54,8 +53,7 @@ namespace Phys
 
             return new FCollPoly()
             {
-                Vertices = vertices,
-                Indices = new int[] { 0, 1, 1, 2, 2, 3, 3, 0 }
+                Vertices = vertices
             };
         }
     }

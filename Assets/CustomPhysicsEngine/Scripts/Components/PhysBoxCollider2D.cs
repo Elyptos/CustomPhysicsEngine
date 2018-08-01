@@ -13,6 +13,8 @@ namespace Phys
     {
         public FCollRect CollisionRect = new FCollRect() { Size = Vector2.one };
 
+        private Manifold manifold;
+
         public FCollPoly CollisionBody
         {
             get;
@@ -41,6 +43,16 @@ namespace Phys
                 CollisionBody.Vertices[2],
                 CollisionBody.Vertices[3]
             }, fillColor, ColliderColor);
+
+            if (manifold != null)
+            {
+                Handles.color = Color.red;
+
+                foreach(var elem in manifold.Contacts)
+                {
+                    Handles.DrawSolidDisc(elem.Position, Vector3.forward, 0.1f);
+                }
+            }
         }
 #endif
 
@@ -57,14 +69,14 @@ namespace Phys
             {
                 PhysBoxCollider2D other = collider as PhysBoxCollider2D;
 
-                return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody);
+                return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody, out manifold);
             }
-            else if(collider is PhysSphereCollider2D)
-            {
-                PhysSphereCollider2D other = collider as PhysSphereCollider2D;
+            //else if(collider is PhysSphereCollider2D)
+            //{
+            //    PhysSphereCollider2D other = collider as PhysSphereCollider2D;
 
-                return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody);
-            }
+            //    return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody);
+            //}
 
             return false;
         }

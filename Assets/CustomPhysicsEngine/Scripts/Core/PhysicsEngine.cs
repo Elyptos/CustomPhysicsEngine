@@ -86,11 +86,11 @@ namespace Phys
 
             while (_isRunning)
             {
-                foreach(PhysCollider collider1 in colliderReg)
+                foreach (PhysCollider collider1 in colliderReg)
                 {
                     collider1.UpdateCollisionBody();
 
-                    foreach(PhysCollider collider2 in colliderReg)
+                    foreach (PhysCollider collider2 in colliderReg)
                     {
                         if (collider1 == collider2)
                             continue;
@@ -99,6 +99,8 @@ namespace Phys
 
                         Debug.Log("Collision: " + collider1.IsColliding(collider2));
                     }
+
+                    break;
                 }
 
                 yield return null;

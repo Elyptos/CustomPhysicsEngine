@@ -13,6 +13,8 @@ namespace Phys
     {
         public FCollSphere CollisionSphere = new FCollSphere() { Radius = 0.5f };
 
+        private Manifold manifold;
+
         public FCollSphere CollisionBody
         {
             get;
@@ -39,6 +41,13 @@ namespace Phys
 
             Handles.color = fillColor;
             Handles.DrawSolidDisc(CollisionBody.Center, Vector3.forward, CollisionBody.Radius);
+
+            if(manifold != null)
+            {
+                Handles.color = Color.red;
+
+                Handles.DrawSolidDisc(manifold.Contacts[0].Position, Vector3.forward, 0.1f);
+            }
         }
 #endif
 
@@ -51,17 +60,18 @@ namespace Phys
 
         public override bool IsColliding(PhysCollider collider)
         {
-            if (collider is PhysBoxCollider2D)
-            {
-                PhysBoxCollider2D other = collider as PhysBoxCollider2D;
+            //if (collider is PhysBoxCollider2D)
+            //{
+            //    PhysBoxCollider2D other = collider as PhysBoxCollider2D;
 
-                return CollisionDetector.IsCollidingRect(other.CollisionBody, CollisionBody);
-            }
-            else if(collider is PhysSphereCollider2D)
+            //    return CollisionDetector.IsCollidingRect(other.CollisionBody, CollisionBody);
+            //}
+            //else 
+            if(collider is PhysSphereCollider2D)
             {
                 PhysSphereCollider2D other = collider as PhysSphereCollider2D;
 
-                return CollisionDetector.IsCollidingSphere(CollisionBody, other.CollisionBody);
+                return CollisionDetector.IsCollidingSphere(CollisionBody, other.CollisionBody, out manifold);
             }
 
             return false;

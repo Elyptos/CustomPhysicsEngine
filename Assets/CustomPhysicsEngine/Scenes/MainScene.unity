@@ -229,7 +229,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 300097179}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.872, y: 0.016, z: 0}
+  m_LocalPosition: {x: 11, y: 6.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 1956180419}
@@ -243,13 +243,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 300097179}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 06279bdd38a676f459beefaeb5d69776, type: 3}
+  m_Script: {fileID: 11500000, guid: 64cf405648b8d044b9bef226e4ff396a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   showBounds: 0
-  CollisionSphere:
-    Center: {x: 0, y: 0}
-    Radius: 0.5
+  CollisionRect:
+    Size: {x: 6, y: 5}
+    Offset: {x: 0, y: 0}
 --- !u!1 &441872489
 GameObject:
   m_ObjectHideFlags: 0
@@ -409,13 +409,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 2088766658}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 06279bdd38a676f459beefaeb5d69776, type: 3}
+  m_Script: {fileID: 11500000, guid: 64cf405648b8d044b9bef226e4ff396a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   showBounds: 0
-  CollisionSphere:
-    Center: {x: 0, y: 0}
-    Radius: 0.5
+  CollisionRect:
+    Size: {x: 8, y: 3}
+    Offset: {x: 0, y: 0}
 --- !u!4 &2088766660
 Transform:
   m_ObjectHideFlags: 0
@@ -423,7 +423,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 2088766658}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.5, y: 0, z: 0}
+  m_LocalPosition: {x: 8, y: 3.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 1956180419}
