@@ -73,17 +73,6 @@ namespace Phys
 
         }
 #endif
-        public virtual FAABB2D EvaluateBounds()
-        {
-            Vector2 halfScale = transform.localScale * 0.5f;
-            Vector2 pos = transform.position;
-
-            return new FAABB2D()
-            {
-                Min = pos - halfScale,
-                Max = pos + halfScale
-            };
-        }
 
         public void UpdateCollisionBody()
         {
@@ -98,23 +87,21 @@ namespace Phys
 
         }
 
-        public virtual bool IsColliding(PhysCollider collider)
+        public virtual bool IsColliding(PhysCollider collider, out Manifold manifold)
         {
+            manifold = null;
             return false;
         }
 
         protected override void OnRegister()
         {
             IsDirty = true;
-            PhysicsEngine.RegisterCollider(this);
+
+            if (GetComponent<PhysCompoundCollider>() == null)
+                gameObject.AddComponent<PhysCompoundCollider>();
         }
 
-        protected override void OnUnregister()
-        {
-            PhysicsEngine.UnregisterCollider(this);
-        }
-
-        protected virtual void Update()
+        protected virtual void FixedUpdate()
         {
             IsDirty = true;
         }

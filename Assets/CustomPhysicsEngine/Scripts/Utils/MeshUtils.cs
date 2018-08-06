@@ -31,16 +31,30 @@ namespace Phys
             return p1 + lambda * edgeDir;
         }
 
-        public static Vector2 CalcNormalCC(Vector2 p1, Vector2 p2)
+        public static Vector2 CalcNormal(Vector2 p1, Vector2 p2)
         {
             Vector2 dir = (p2 - p1).normalized;
 
             return new Vector2(dir.y, -dir.x);
         }
 
-        public static Vector2 CalcNormal(Vector2 p1, Vector2 p2)
+        public static Vector2 CalcNormalCC(Vector2 p1, Vector2 p2)
         {
             Vector2 dir = (p2 - p1).normalized;
+
+            return new Vector2(-dir.y, dir.x);
+        }
+
+        public static Vector2 CalcNormalRaw(Vector2 p1, Vector2 p2)
+        {
+            Vector2 dir = p2 - p1;
+
+            return new Vector2(dir.y, -dir.x);
+        }
+
+        public static Vector2 CalcNormalCCRaw(Vector2 p1, Vector2 p2)
+        {
+            Vector2 dir = p2 - p1;
 
             return new Vector2(-dir.y, dir.x);
         }
@@ -83,7 +97,7 @@ namespace Phys
         //    return 0;
         //}
 
-        private static int LeftIndex(int index, int indexBufferSize)
+        public static int LeftIndex(int index, int indexBufferSize)
         {
             if (index == 0)
                 return indexBufferSize - 1;
@@ -91,7 +105,7 @@ namespace Phys
                 return index - 1;
         }
 
-        private static int RightIndex(int index, int indexBufferSize)
+        public static int RightIndex(int index, int indexBufferSize)
         {
             if (index == indexBufferSize - 1)
                 return 0;

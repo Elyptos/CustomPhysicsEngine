@@ -16,8 +16,12 @@ namespace Phys
         public static readonly int MAX_CONTACTS = 2;
 
         public FContact[] Contacts;
-        public PhysCollider A;
-        public PhysCollider B;
+        public PhysRigidbody A;
+        public PhysRigidbody B;
+        public Vector2 EdgeNormalA;
+        public Vector2 EdgeNormalB;
+        public PhysCompoundCollider BComp;
+        public bool BodyAInc;
     }
 }
 
