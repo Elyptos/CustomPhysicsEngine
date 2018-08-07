@@ -3,15 +3,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using Phys;
 
-public class CircleSpawner : MonoBehaviour {
+public class ObjectSpawner : MonoBehaviour {
 
-    public Transform CirclePrefab;
+    public List<Transform> ObjectPrefabs = new List<Transform>();
 
     public float SpawnInterval;
     public float SpawnAmount;
     public Vector2 PositionVariation;
     public Vector2 SizeVariation;
     public Vector2 MassVariation;
+    public Vector2 RotationVariation;
 
     private int spawnedAmount;
 
@@ -27,12 +28,13 @@ public class CircleSpawner : MonoBehaviour {
             Vector2 position = transform.position + transform.right * Random.Range(PositionVariation.x, PositionVariation.y);
             float radius = Random.Range(SizeVariation.x, SizeVariation.y);
             float mass = Random.Range(MassVariation.x, MassVariation.y);
+            int index = Random.Range(0, ObjectPrefabs.Count);
+            float rot = Random.Range(RotationVariation.x, RotationVariation.y);
 
-            Transform trans = Instantiate(CirclePrefab);
+            Transform trans = Instantiate(ObjectPrefabs[index]);
             trans.position = position;
-
-            PhysSphereCollider2D coll = trans.GetComponent<PhysSphereCollider2D>();
-            coll.CollisionSphere.Radius = radius;
+            trans.localScale *= radius;
+            trans.rotation *= Quaternion.Euler(0f, 0f, rot);
 
             PhysRigidbody rigid = trans.GetComponent<PhysRigidbody>();
             rigid.Mass = mass;

@@ -279,7 +279,7 @@ namespace Phys
 
         private void ResolveContact(CollisionContact contact, Vector2 actualCollisionNormal, Vector2 edgeNormalColl, Vector2 edgeNormal, FCollisionBodyExtractor otherObject)
         {
-            float bounce = Mathf.Min(Bounciness, otherObject.Bounciness);
+            float bounce = (Bounciness + otherObject.Bounciness) * 0.5f;//Mathf.Min(Bounciness, otherObject.Bounciness);
 
             Vector2 fN = edgeNormalColl * Vector2.Dot(force, edgeNormalColl);
 
@@ -333,7 +333,7 @@ namespace Phys
                 }
             }
 
-            if(!impulseApplied)
+            if (!impulseApplied)
             {
                 float frictionCoef = Mathf.Min(Roughness * 0.1f, otherObject.Body.Roughness * 0.1f);
                 Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
@@ -378,7 +378,7 @@ namespace Phys
                 }
             }
 
-            if(Vector2.Dot(force, edgeNormalColl) < 0f)
+            if (Vector2.Dot(force, edgeNormalColl) < 0f)
             {
                 force -= fN;
             }
@@ -398,14 +398,15 @@ namespace Phys
 
             if(massB == 0f)
             {
-                impulse = velA;
+                impulse = -velA;
             }
             else
             {
                 impulse = (massA * velA + massB * (2 * -velB - velA)) / (massA + massB);
             }
 
-            impulse = impulse * (1 + bounciness);
+            //impulse = impulse * (1 + bounciness);
+            impulse = (velA - impulse) * bounciness;
 
             return impulse;
         }

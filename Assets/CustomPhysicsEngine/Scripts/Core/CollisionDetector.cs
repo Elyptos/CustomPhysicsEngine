@@ -351,11 +351,23 @@ namespace Phys
                 contactPoints.RemoveAt(0);
 
             manifold.ContactPoints = contactPoints.ToArray();
-            manifold.Normal = -collisionAxis.Axis;
             manifold.Penetration = penetration;
-            manifold.BodyAInc = collisionAxis.BodyA;
-            manifold.EdgeNormalA = manifold.BodyAInc ? eInc.Normal : eRef.Normal;
-            manifold.EdgeNormalB = manifold.BodyAInc ? eRef.Normal : eInc.Normal;
+
+            if (flipped)
+            {
+                manifold.Normal = collisionAxis.Axis;
+                manifold.BodyAInc = collisionAxis.BodyA;
+                manifold.EdgeNormalA = !manifold.BodyAInc ? eInc.Normal : eRef.Normal;
+                manifold.EdgeNormalB = !manifold.BodyAInc ? eRef.Normal : eInc.Normal;
+            }
+            else
+            {
+                manifold.Normal = collisionAxis.Axis;
+                manifold.BodyAInc = !collisionAxis.BodyA;
+                manifold.EdgeNormalA = manifold.BodyAInc ? eInc.Normal : eRef.Normal;
+                manifold.EdgeNormalB = manifold.BodyAInc ? eRef.Normal : eInc.Normal;
+            }
+
 
             return true;
         }
