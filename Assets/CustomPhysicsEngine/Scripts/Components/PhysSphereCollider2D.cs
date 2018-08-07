@@ -74,21 +74,31 @@ namespace Phys
             CollisionBody = new FCollSphere() { Center = CollisionSphere.Center + (Vector2)transform.position, Radius = CollisionSphere.Radius * radMod};
         }
 
-        public override bool IsColliding(PhysCollider collider, out Manifold manifold)
+        public override bool IsColliding(PhysCollider collider, out CollisionContact manifold, out bool isBodyA)
         {
             if (collider is PhysBoxCollider2D)
             {
                 PhysBoxCollider2D other = collider as PhysBoxCollider2D;
 
+                isBodyA = false;
                 return CollisionDetector.IsCollidingRect(other.CollisionBody, CollisionBody, out manifold);
             }
             else if(collider is PhysSphereCollider2D)
             {
                 PhysSphereCollider2D other = collider as PhysSphereCollider2D;
 
+                isBodyA = true;
                 return CollisionDetector.IsCollidingSphere(CollisionBody, other.CollisionBody, out manifold);
             }
+            else if (collider is PhysPolyCollider2D)
+            {
+                PhysPolyCollider2D other = collider as PhysPolyCollider2D;
 
+                isBodyA = false;
+                return CollisionDetector.IsCollidingPoly(other.CollisionBody, CollisionBody, out manifold);
+            }
+
+            isBodyA = false;
             manifold = null;
             return false;
         }

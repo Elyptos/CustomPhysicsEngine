@@ -87,9 +87,10 @@ namespace Phys
 
         }
 
-        public virtual bool IsColliding(PhysCollider collider, out Manifold manifold)
+        public virtual bool IsColliding(PhysCollider collider, out CollisionContact manifold, out bool isBodyA)
         {
             manifold = null;
+            isBodyA = true;
             return false;
         }
 

@@ -177,15 +177,15 @@ namespace Phys
 
                 foreach(PhysRigidbody rigid in rigidbodiesList)
                 {
-                    rigid.EvaluateBounds();
                     rigid.UpdateAllCollider();
+                    rigid.EvaluateBounds();
                     rigid.Warmup();
                 }
 
                 foreach(PhysCompoundCollider collider in colliderList)
                 {
-                    collider.EvaluateBounds();
                     collider.UpdateAllCollider();
+                    collider.EvaluateBounds();
                     collider.Warmup();
                 }
 

@@ -15,7 +15,7 @@ namespace Phys
             public float Penetration;
         }
 
-        public static bool IsCollidingSphere(FCollSphere a, FCollSphere b, out Manifold manifold)
+        public static bool IsCollidingSphere(FCollSphere a, FCollSphere b, out CollisionContact manifold)
         {
             bool flipRef = b.Center.x < a.Center.x || b.Center.y < a.Center.y;
 
@@ -32,52 +32,58 @@ namespace Phys
 
             float delta = rel.magnitude;
 
-            FContact contact = new FContact();
-
-            manifold = new Manifold();
+            manifold = new CollisionContact();
 
             if (delta == 0.0f)
             {
-                contact.Penetration = a.Radius;
-                contact.Normal = Vector2.up;
-                contact.Position = a.Center;
+                manifold.Penetration = a.Radius;
+                manifold.Normal = Vector2.up;
+                manifold.ContactPoints = new Vector2[] { a.Center };
             }
             else
             {
-                contact.Penetration = rSum - delta;
-                contact.Normal = rel / delta;
-                contact.Position = flipRef ? contact.Normal * b.Radius + b.Center : contact.Normal * a.Radius + a.Center;
+                manifold.Penetration = rSum - delta;
+                manifold.Normal = rel / delta;
+                manifold.ContactPoints = new Vector2[] { flipRef ? manifold.Normal * b.Radius + b.Center : manifold.Normal * a.Radius + a.Center };
             }
 
-            manifold.BodyAInc = !flipRef;
-            manifold.Contacts = new FContact[1];
-            manifold.Contacts[0] = contact;
+            manifold.BodyAInc = flipRef;
             
             if(flipRef)
             {
-                manifold.EdgeNormalA = -contact.Normal;
-                manifold.EdgeNormalB = contact.Normal;
+                manifold.EdgeNormalA = -manifold.Normal;
+                manifold.EdgeNormalB = manifold.Normal;
             }
             else
             {
-                manifold.EdgeNormalA = contact.Normal;
-                manifold.EdgeNormalB = -contact.Normal;
+                manifold.EdgeNormalA = manifold.Normal;
+                manifold.EdgeNormalB = -manifold.Normal;
             }
 
             return true;
         }
 
-        public static bool IsCollidingRect(FCollPoly a, FCollPoly b, out Manifold manifold)
+        public static bool IsCollidingRect(FCollPoly a, FCollPoly b, out CollisionContact manifold)
         {
             return PolySAT(a, b, out manifold);
         }
 
-        public static bool IsCollidingRect(FCollPoly a, FCollSphere b, out Manifold manifold)
+        public static bool IsCollidingRect(FCollPoly a, FCollSphere b, out CollisionContact manifold)
         {
             return SphereSAT(a, b, out manifold);
         }
 
-        private static bool SphereSAT(FCollPoly p1, FCollSphere p2, out Manifold manifold)
+        public static bool IsCollidingPoly(FCollPoly a, FCollPoly b, out CollisionContact manifold)
+        {
+            return PolySAT(a, b, out manifold);
+        }
+
+        public static bool IsCollidingPoly(FCollPoly a, FCollSphere b, out CollisionContact manifold)
+        {
+            return SphereSAT(a, b, out manifold);
+        }
+
+        private static bool SphereSAT(FCollPoly p1, FCollSphere p2, out CollisionContact manifold)
         {
             FSATAxis[] axisPoly = GetAxis_sat(ref p1.Vertices);
             FSATAxis circleAxis = GetCircleAxis_sat(p2.Center, ref p1.Vertices);
@@ -164,7 +170,7 @@ namespace Phys
             //Debug.Log("Collision axis: " + collisionAxis.Axis);
             //Debug.Log("Penetration: " + penetration);
 
-            manifold = new Manifold();
+            manifold = new CollisionContact();
 
             FEdge eRef;
 
@@ -184,49 +190,31 @@ namespace Phys
 
             if (Vector2.Dot(normLeft, leftRel) > 0f && Vector2.Dot(eRef.Normal, leftRel) > 0f)
             {
-                manifold.Contacts = new FContact[]
-                {
-                    new FContact()
-                    {
-                        Position = p2.Center - leftRel.normalized * p2.Radius,
-                        Normal = collisionAxis.Axis,
-                        Penetration = penetration
-                    }
-                };
+                manifold.Penetration = penetration;
+                manifold.Normal = collisionAxis.Axis;
+                manifold.ContactPoints = new Vector2[] { p2.Center - leftRel.normalized * p2.Radius };
             }
             else if(Vector2.Dot(normRight, rightRel) > 0f && Vector2.Dot(eRef.Normal, rightRel) > 0f)
             {
-                manifold.Contacts = new FContact[]
-                {
-                    new FContact()
-                    {
-                        Position = p2.Center - rightRel.normalized * p2.Radius,
-                        Normal = collisionAxis.Axis,
-                        Penetration = penetration
-                    }
-                };
+                manifold.Penetration = penetration;
+                manifold.Normal = collisionAxis.Axis;
+                manifold.ContactPoints = new Vector2[] { p2.Center - rightRel.normalized * p2.Radius };
             }
             else
             {
-                manifold.Contacts = new FContact[]
-                {
-                    new FContact()
-                    {
-                        Position = p2.Center - eRef.Normal * p2.Radius,
-                        Normal = collisionAxis.Axis,
-                        Penetration = penetration
-                    }
-                };
+                manifold.Penetration = penetration;
+                manifold.Normal = collisionAxis.Axis;
+                manifold.ContactPoints = new Vector2[] { p2.Center - eRef.Normal * p2.Radius };
             }
 
             manifold.BodyAInc = false;
             manifold.EdgeNormalA = eRef.Normal;
-            manifold.EdgeNormalB = (p2.Center - manifold.Contacts[0].Position).normalized;
+            manifold.EdgeNormalB = (p2.Center - manifold.ContactPoints[0]).normalized;
 
             return true;
         }
 
-        private static bool PolySAT(FCollPoly p1, FCollPoly p2, out Manifold manifold)
+        private static bool PolySAT(FCollPoly p1, FCollPoly p2, out CollisionContact manifold)
         {
             manifold = null;
 
@@ -308,7 +296,7 @@ namespace Phys
                 }
             }
 
-            manifold = new Manifold();
+            manifold = new CollisionContact();
 
             FEdge eRef;
             FEdge eInc;
@@ -324,40 +312,50 @@ namespace Phys
                 eRef = GetBestEdge_sat(ref p2.Vertices, collisionAxis.Axis);
             }
 
+            bool flipped = false;
+
             if (Mathf.Abs(Vector2.Dot(eInc.BV - eInc.AV, collisionAxis.Axis)) < Mathf.Abs(Vector2.Dot(eRef.BV - eRef.AV, collisionAxis.Axis)))
             {
                 FEdge copy = eRef;
                 eRef = eInc;
                 eInc = copy;
+
+                flipped = true;
             }
 
             Vector2 refDir = (eRef.BV - eRef.AV).normalized;
 
             float offset = Vector2.Dot(refDir, eRef.AV);
 
-            List<FContact> contactPoints = Clip_sat(eInc.AV, eInc.BV, refDir, offset);
+            List<Vector2> contactPoints = Clip_sat(eInc.AV, eInc.BV, refDir, offset);
 
             if (contactPoints.Count < 2)
                 return true;
 
             offset = Vector2.Dot(eRef.BV, refDir);
 
-            contactPoints = Clip_sat(contactPoints[0].Position, contactPoints[1].Position, -refDir, -offset);
+            contactPoints = Clip_sat(contactPoints[0], contactPoints[1], -refDir, -offset);
 
             if (contactPoints.Count < 2)
                 return true;
 
             eRef.Normal = MeshUtils.CalcNormal(eRef.AV, eRef.BV);
+            eInc.Normal = MeshUtils.CalcNormal(eInc.AV, eInc.BV);
 
             //Debug.Log(eRef.Normal);
 
-            if(Vector2.Dot(eRef.Normal, contactPoints[1].Position - eRef.AV) > 0f)
+            if(Vector2.Dot(eRef.Normal, contactPoints[1] - eRef.AV) > 0f)
                 contactPoints.RemoveAt(1);
 
-            if (Vector2.Dot(eRef.Normal, contactPoints[0].Position - eRef.AV) > 0f)
+            if (Vector2.Dot(eRef.Normal, contactPoints[0] - eRef.AV) > 0f)
                 contactPoints.RemoveAt(0);
 
-            manifold.Contacts = contactPoints.ToArray();
+            manifold.ContactPoints = contactPoints.ToArray();
+            manifold.Normal = -collisionAxis.Axis;
+            manifold.Penetration = penetration;
+            manifold.BodyAInc = collisionAxis.BodyA;
+            manifold.EdgeNormalA = manifold.BodyAInc ? eInc.Normal : eRef.Normal;
+            manifold.EdgeNormalB = manifold.BodyAInc ? eRef.Normal : eInc.Normal;
 
             return true;
         }
@@ -477,18 +475,18 @@ namespace Phys
             return res;
         }
 
-        private static List<FContact> Clip_sat(Vector2 v1, Vector2 v2, Vector2 normal, float offset)
+        private static List<Vector2> Clip_sat(Vector2 v1, Vector2 v2, Vector2 normal, float offset)
         {
-            List<FContact> contactPoints = new List<FContact>();
+            List<Vector2> contactPoints = new List<Vector2>();
 
             float d1 = Vector2.Dot(normal, v1) - offset;
             float d2 = Vector2.Dot(normal, v2) - offset;
 
             if (d1 >= 0f)
-                contactPoints.Add(new FContact() { Position = v1 });
+                contactPoints.Add(v1);
 
             if (d2 >= 0f)
-                contactPoints.Add(new FContact() { Position = v2 });
+                contactPoints.Add(v2);
 
             if (d1 * d2 < 0f)
             {
@@ -499,7 +497,7 @@ namespace Phys
                 edge *= edgeOffset;
                 edge += v1;
 
-                contactPoints.Add(new FContact() { Position = edge });
+                contactPoints.Add(edge);
             }
 
             return contactPoints;

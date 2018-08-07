@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Linq;
 using System.Collections.Generic;
 
 #if UNITY_EDITOR
@@ -9,9 +10,9 @@ using UnityEngine;
 
 namespace Phys
 {
-    public class PhysBoxCollider2D : PhysCollider
+    public class PhysPolyCollider2D : PhysCollider
     {
-        public FCollRect CollisionRect = new FCollRect() { Size = Vector2.one };
+        public List<Vector2> Vertices = new List<Vector2>();
 
         //private Manifold manifold = null;
 
@@ -23,7 +24,7 @@ namespace Phys
 
         protected override Color ColliderColor
         {
-            get { return Color.blue; }
+            get { return Color.yellow; }
         }
 
 #if UNITY_EDITOR
@@ -31,36 +32,45 @@ namespace Phys
         {
             base.DrawCollider();
 
+            List<Vector3> verts = CollisionBody.Vertices.ToList().ConvertAll(x => (Vector3)x);
+
+            if (verts.Count == 0)
+                return;
+
+            verts.Add(verts.First());
+
             Color fillColor = ColliderColor;
 
             fillColor.a = FILL_COLOR_ALPHA;
 
             UpdateCollisionBody_internal();
 
-            Handles.DrawSolidRectangleWithOutline(new Vector3[] {
-                CollisionBody.Vertices[0],
-                CollisionBody.Vertices[1],
-                CollisionBody.Vertices[2],
-                CollisionBody.Vertices[3]
-            }, fillColor, ColliderColor);
+            Handles.DrawPolyLine(verts.ToArray());
 
-            //if (manifold != null && manifold.Contacts != null)
-            //{
-            //    Handles.color = Color.red;
-
-            //    foreach(var elem in manifold.Contacts)
-            //    {
-            //        Handles.DrawSolidDisc(elem.Position, Vector3.forward, 0.1f);
-            //    }
-            //}
+            Handles.color = fillColor;
+            Handles.DrawAAConvexPolygon(verts.ToArray());
         }
 #endif
 
         protected override FAABB2D EvaluateBounds_internal()
         {
-            CollisionRect.TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
+            if(!Application.isPlaying)
+            {
+                FMatrix3x3 TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
 
-            CollisionBody = CollisionRect.ToPoly();
+                CollisionBody = new FCollPoly()
+                {
+                    Vertices = new Vector2[Vertices.Count]
+                };
+
+                for (int i = 0; i < Vertices.Count; i++)
+                {
+                    CollisionBody.Vertices[i] = TRS * Vertices[i];
+                }
+            }
+
+            if (CollisionBody.Vertices.Length == 0)
+                return new FAABB2D();
 
             Vector2 xAxis = Vector2.right;
             Vector2 yAxis = Vector2.up;
@@ -108,9 +118,17 @@ namespace Phys
 
         protected override void UpdateCollisionBody_internal()
         {
-            CollisionRect.TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
+            FMatrix3x3 TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
 
-            CollisionBody = CollisionRect.ToPoly();
+            CollisionBody = new FCollPoly()
+            {
+                Vertices = new Vector2[Vertices.Count]
+            };
+
+            for (int i = 0; i < Vertices.Count; i++)
+            {
+                CollisionBody.Vertices[i] = TRS * Vertices[i];
+            }
         }
 
         public override bool IsColliding(PhysCollider collider, out CollisionContact manifold, out bool isBodyA)
@@ -120,18 +138,18 @@ namespace Phys
                 PhysBoxCollider2D other = collider as PhysBoxCollider2D;
 
                 isBodyA = true;
-                return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody, out manifold);
+                return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
+            }
+            else if(collider is PhysPolyCollider2D)
+            {
+                PhysPolyCollider2D other = collider as PhysPolyCollider2D;
+
+                isBodyA = true;
+                return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
             }
             else if (collider is PhysSphereCollider2D)
             {
                 PhysSphereCollider2D other = collider as PhysSphereCollider2D;
-
-                isBodyA = true;
-                return CollisionDetector.IsCollidingRect(CollisionBody, other.CollisionBody, out manifold);
-            }
-            else if (collider is PhysPolyCollider2D)
-            {
-                PhysPolyCollider2D other = collider as PhysPolyCollider2D;
 
                 isBodyA = true;
                 return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
