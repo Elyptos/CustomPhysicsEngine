@@ -58,6 +58,15 @@ namespace Phys
             };
         }
 
+        public static FAABB2D Multiply(FAABB2D box, FMatrix3x3 matrix)
+        {
+            return new FAABB2D()
+            {
+                Min = matrix * box.Min,
+                Max = matrix * box.Max
+            };
+        }
+
         public bool Intersects(FAABB2D other)
         {
             return Min.x <= other.Max.x && other.Min.x <= Max.x
@@ -90,6 +99,11 @@ namespace Phys
         public static FAABB2D operator *(FAABB2D box, Vector2 vec)
         {
             return Multiply(box, vec);
+        }
+
+        public static FAABB2D operator *(FAABB2D box, FMatrix3x3 matrix)
+        {
+            return Multiply(box, matrix);
         }
 
         public static FAABB2D operator +(FAABB2D box, Vector2 vec)

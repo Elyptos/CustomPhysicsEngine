@@ -12,7 +12,6 @@ namespace Phys
             public Vector2 Axis;
             public bool BodyA;
             public FEdge Edge;
-            public float Penetration;
         }
 
         public static bool IsCollidingSphere(FCollSphere a, FCollSphere b, out CollisionContact manifold)
@@ -355,7 +354,7 @@ namespace Phys
 
             if (flipped)
             {
-                manifold.Normal = collisionAxis.Axis;
+                manifold.Normal = -collisionAxis.Axis;
                 manifold.BodyAInc = collisionAxis.BodyA;
                 manifold.EdgeNormalA = !manifold.BodyAInc ? eInc.Normal : eRef.Normal;
                 manifold.EdgeNormalB = !manifold.BodyAInc ? eRef.Normal : eInc.Normal;

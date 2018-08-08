@@ -56,9 +56,10 @@ MonoBehaviour:
   Collider: []
   showBoundsInGame: 0
   Velocity: {x: 0, y: 0}
+  AngularVelocity: 0
   Acceleration: {x: 0, y: 0}
   GravityMultiplier: {x: 1, y: 1}
-  Mass: 1
+  Density: 1.175
   Bounciness: 0.5
   VolumeDensity: 1.2
   DragCoefficient: 0.45
@@ -74,6 +75,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   showBounds: 0
-  CollisionSphere:
-    Center: {x: 0, y: 0}
-    Radius: 0.5
+  _offset: {x: 0, y: 0}
+  _radius: 0.5

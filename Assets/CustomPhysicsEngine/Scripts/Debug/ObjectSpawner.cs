@@ -11,7 +11,7 @@ public class ObjectSpawner : MonoBehaviour {
     public float SpawnAmount;
     public Vector2 PositionVariation;
     public Vector2 SizeVariation;
-    public Vector2 MassVariation;
+    public Vector2 DensityVariation;
     public Vector2 RotationVariation;
 
     private int spawnedAmount;
@@ -27,7 +27,7 @@ public class ObjectSpawner : MonoBehaviour {
         {
             Vector2 position = transform.position + transform.right * Random.Range(PositionVariation.x, PositionVariation.y);
             float radius = Random.Range(SizeVariation.x, SizeVariation.y);
-            float mass = Random.Range(MassVariation.x, MassVariation.y);
+            float density = Random.Range(DensityVariation.x, DensityVariation.y);
             int index = Random.Range(0, ObjectPrefabs.Count);
             float rot = Random.Range(RotationVariation.x, RotationVariation.y);
 
@@ -37,7 +37,7 @@ public class ObjectSpawner : MonoBehaviour {
             trans.rotation *= Quaternion.Euler(0f, 0f, rot);
 
             PhysRigidbody rigid = trans.GetComponent<PhysRigidbody>();
-            rigid.Mass = mass;
+            rigid.Density = density;
 
             spawnedAmount++;
         }

@@ -11,7 +11,7 @@ public class CircleSpawner : MonoBehaviour {
     public float SpawnAmount;
     public Vector2 PositionVariation;
     public Vector2 SizeVariation;
-    public Vector2 MassVariation;
+    public Vector2 DensityVariation;
 
     private int spawnedAmount;
 
@@ -26,16 +26,16 @@ public class CircleSpawner : MonoBehaviour {
         {
             Vector2 position = transform.position + transform.right * Random.Range(PositionVariation.x, PositionVariation.y);
             float radius = Random.Range(SizeVariation.x, SizeVariation.y);
-            float mass = Random.Range(MassVariation.x, MassVariation.y);
+            float density = Random.Range(DensityVariation.x, DensityVariation.y);
 
             Transform trans = Instantiate(CirclePrefab);
             trans.position = position;
 
             PhysSphereCollider2D coll = trans.GetComponent<PhysSphereCollider2D>();
-            coll.CollisionSphere.Radius = radius;
+            coll.Radius = radius;
 
             PhysRigidbody rigid = trans.GetComponent<PhysRigidbody>();
-            rigid.Mass = mass;
+            rigid.Density = density;
 
             spawnedAmount++;
         }

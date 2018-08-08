@@ -38,17 +38,17 @@ namespace Phys
         {
             Handles.DrawDottedLines(new Vector3[]
             {
-                CachedBounds.Min,
-                new Vector2(CachedBounds.Min.x, CachedBounds.Max.y),
+                CachedBoundsWS.Min,
+                new Vector2(CachedBoundsWS.Min.x, CachedBoundsWS.Max.y),
 
-                new Vector2(CachedBounds.Min.x, CachedBounds.Max.y),
-                CachedBounds.Max,
+                new Vector2(CachedBoundsWS.Min.x, CachedBoundsWS.Max.y),
+                CachedBoundsWS.Max,
 
-                CachedBounds.Max,
-                new Vector2(CachedBounds.Max.x, CachedBounds.Min.y),
+                CachedBoundsWS.Max,
+                new Vector2(CachedBoundsWS.Max.x, CachedBoundsWS.Min.y),
 
-                new Vector2(CachedBounds.Max.x, CachedBounds.Min.y),
-                CachedBounds.Min
+                new Vector2(CachedBoundsWS.Max.x, CachedBoundsWS.Min.y),
+                CachedBoundsWS.Min
             }, 1.0f);
         }
 #endif
@@ -58,11 +58,22 @@ namespace Phys
             MassPoint = transform.position;
         }
 
-        public void UpdateAllCollider()
+        public virtual void UpdateAllCollider()
         {
-            for(int i = 0; i < Collider.Length; i++)
+            Area = 0f;
+            Mass = 0f;
+            Inertia = 0f;
+
+            for (int i = 0; i < Collider.Length; i++)
             {
-                Collider[i].UpdateCollisionBody();
+                if(Collider[i].NeedsBodyUpdate())
+                    Collider[i].UpdateCollisionBody(0f);
+
+                Collider[i].CalculateWSCollisionBody();
+
+                Area += Collider[i].Area;
+                Mass += Collider[i].Mass;
+                Inertia += Collider[i].Inertia;
             }
         }
 
@@ -71,11 +82,15 @@ namespace Phys
             if (Collider.Length == 0)
                 return new FAABB2D();
 
-            FAABB2D res = Collider[0].EvaluateBounds();
+            Collider[0].EvaluateBounds();
+
+            FAABB2D res = Collider[0].CachedBounds;
 
             for (int i = 1; i < Collider.Length; i++)
             {
-                res = FAABB2D.Combine(res, Collider[i].EvaluateBounds());
+                Collider[i].EvaluateBounds();
+
+                res = FAABB2D.Combine(res, Collider[i].CachedBounds);
             }
 
             return res;

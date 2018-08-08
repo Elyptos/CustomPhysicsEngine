@@ -12,9 +12,30 @@ namespace Phys
 {
     public class PhysPolyCollider2D : PhysCollider
     {
-        public List<Vector2> Vertices = new List<Vector2>();
+        [SerializeField]
+        private Vector2[] _vertices;
+
+        public Vector2[] Vertices
+        {
+            get
+            {
+                return _vertices;
+            }
+            set
+            {
+                _vertices = value;
+                IsDirty = true;
+            }
+        }
+
 
         //private Manifold manifold = null;
+
+        public FCollPoly CollisionBodyWS
+        {
+            get;
+            private set;
+        }
 
         public FCollPoly CollisionBody
         {
@@ -32,7 +53,10 @@ namespace Phys
         {
             base.DrawCollider();
 
-            List<Vector3> verts = CollisionBody.Vertices.ToList().ConvertAll(x => (Vector3)x);
+            UpdateCollisionBody_internal();
+            CalculateWSCollisionBody();
+
+            List<Vector3> verts = CollisionBodyWS.Vertices.ToList().ConvertAll(x => (Vector3)x);
 
             if (verts.Count == 0)
                 return;
@@ -42,8 +66,6 @@ namespace Phys
             Color fillColor = ColliderColor;
 
             fillColor.a = FILL_COLOR_ALPHA;
-
-            UpdateCollisionBody_internal();
 
             Handles.DrawPolyLine(verts.ToArray());
 
@@ -56,20 +78,10 @@ namespace Phys
         {
             if(!Application.isPlaying)
             {
-                FMatrix3x3 TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
-
-                CollisionBody = new FCollPoly()
-                {
-                    Vertices = new Vector2[Vertices.Count]
-                };
-
-                for (int i = 0; i < Vertices.Count; i++)
-                {
-                    CollisionBody.Vertices[i] = TRS * Vertices[i];
-                }
+                UpdateCollisionBody_internal();
             }
 
-            if (CollisionBody.Vertices.Length == 0)
+            if (CollisionBody.Vertices == null || CollisionBody.Vertices.Length == 0)
                 return new FAABB2D();
 
             Vector2 xAxis = Vector2.right;
@@ -109,6 +121,8 @@ namespace Phys
                 }
             }
 
+            needsBoundsUpdate = false;
+
             return new FAABB2D()
             {
                 Min = new Vector2(minMaxX.x, minMaxY.x),
@@ -116,18 +130,51 @@ namespace Phys
             };
         }
 
+        public override void CalculateWSCollisionBody()
+        {
+            CollisionBodyWS = new FCollPoly()
+            {
+                Vertices = new Vector2[CollisionBody.Vertices.Length]
+            };
+
+            for (int i = 0; i < CollisionBody.Vertices.Length; i++)
+            {
+                CollisionBodyWS.Vertices[i] = CollisionBody.Vertices[i] + (Vector2)transform.position;
+            }
+        }
+
         protected override void UpdateCollisionBody_internal()
         {
-            FMatrix3x3 TRS = FMatrix3x3.CreateTRS(transform.position, transform.rotation.eulerAngles.z, transform.localScale);
+            FMatrix3x3 TRS = FMatrix3x3.CreateTRS(Offset, transform.rotation.eulerAngles.z, transform.localScale);
 
             CollisionBody = new FCollPoly()
             {
-                Vertices = new Vector2[Vertices.Count]
+                Vertices = new Vector2[Vertices.Length]
             };
 
-            for (int i = 0; i < Vertices.Count; i++)
+            for (int i = 0; i < Vertices.Length; i++)
             {
                 CollisionBody.Vertices[i] = TRS * Vertices[i];
+            }
+        }
+
+        protected override void UpdateBodyInformation_internal(float density)
+        {
+            Inertia = 0f;
+            Mass = 0f;
+            Area = 0f;
+
+            for (int i = 0; i < CollisionBody.Vertices.Length; i++)
+            {
+                Vector2 a = CollisionBody.Vertices[i];
+                Vector2 b = CollisionBody.Vertices[CollMeshUtils.RightIndex(i, CollisionBody.Vertices.Length)];
+
+                float areaTri = Mathf.Abs(a.Cross(b)) * 0.5f;
+                float massTri = density * areaTri;
+
+                Area += areaTri;
+                Mass += massTri;
+                Inertia += massTri * (a.sqrMagnitude + b.sqrMagnitude + Vector2.Dot(a, b)) / 6f;
             }
         }
 
@@ -138,21 +185,21 @@ namespace Phys
                 PhysBoxCollider2D other = collider as PhysBoxCollider2D;
 
                 isBodyA = true;
-                return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
+                return CollisionDetector.IsCollidingPoly(CollisionBodyWS, other.CollisionBodyWS, out manifold);
             }
             else if(collider is PhysPolyCollider2D)
             {
                 PhysPolyCollider2D other = collider as PhysPolyCollider2D;
 
                 isBodyA = true;
-                return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
+                return CollisionDetector.IsCollidingPoly(CollisionBodyWS, other.CollisionBodyWS, out manifold);
             }
             else if (collider is PhysSphereCollider2D)
             {
                 PhysSphereCollider2D other = collider as PhysSphereCollider2D;
 
                 isBodyA = true;
-                return CollisionDetector.IsCollidingPoly(CollisionBody, other.CollisionBody, out manifold);
+                return CollisionDetector.IsCollidingPoly(CollisionBodyWS, other.CollisionBodyWS, out manifold);
             }
 
             manifold = null;

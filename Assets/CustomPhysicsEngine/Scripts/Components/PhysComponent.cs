@@ -9,6 +9,30 @@ namespace Phys
     {
         private int gObjectID = 0;
 
+        public float Inertia
+        {
+            get;
+            protected set;
+        }
+
+        public float Area
+        {
+            get;
+            protected set;
+        }
+
+        public float Mass
+        {
+            get;
+            protected set;
+        }
+
+        public FAABB2D CachedBoundsWS
+        {
+            get;
+            private set;
+        }
+
         public FAABB2D CachedBounds
         {
             get;
@@ -27,6 +51,11 @@ namespace Phys
         {
             if (gameObject.activeInHierarchy)
                 OnUnregister();
+        }
+
+        protected virtual bool AreCachedBoundsInvalid()
+        {
+            return true;
         }
 
         public virtual void PhysicsUpdate(float deltaTime)
@@ -61,8 +90,13 @@ namespace Phys
 
         public FAABB2D EvaluateBounds()
         {
-            CachedBounds = EvaluateBounds_internal();
-            return CachedBounds;
+            if (AreCachedBoundsInvalid() || !Application.isPlaying)
+                CachedBounds = EvaluateBounds_internal();
+
+
+           CachedBoundsWS = CachedBounds + transform.position;
+
+            return CachedBoundsWS;
         }
 
         protected virtual FAABB2D EvaluateBounds_internal()

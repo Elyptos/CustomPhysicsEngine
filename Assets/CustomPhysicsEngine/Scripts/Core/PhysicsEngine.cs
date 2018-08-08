@@ -200,7 +200,7 @@ namespace Phys
                     {
                         if (ShouldPerformCollisionDetection(id1, idLookUp[rigid2]))
                         {
-                            if(rigid.CachedBounds.Intersects(rigid2.CachedBounds))
+                            if(rigid.CachedBoundsWS.Intersects(rigid2.CachedBoundsWS))
                             {
                                 rigid.GatherCollisionInformation(rigid2);
                             }
@@ -211,7 +211,7 @@ namespace Phys
                     {
                         if (ShouldPerformCollisionDetection(id1, idLookUp[collider]))
                         {
-                            if (rigid.CachedBounds.Intersects(collider.CachedBounds))
+                            if (rigid.CachedBoundsWS.Intersects(collider.CachedBoundsWS))
                             {
                                 rigid.GatherCollisionInformation(collider);
                             }

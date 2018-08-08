@@ -9,21 +9,26 @@ namespace Phys
     public class PhysRigidbody : PhysCompoundCollider
     {
         public Vector2 Velocity;
+        public float AngularVelocity;
         public Vector2 Acceleration;
+
         public Vector2 GravityMultiplier = Vector2.one;
-        public float Mass = 1f;
+        //public float Mass = 1f;
+        public float Density = 1.175f;
         public float Bounciness = 0.9f;
         public float VolumeDensity = 1.2f;
         public float DragCoefficient = 0.45f;
 
         private static readonly float POSITION_CORRECTION_MOD = 0.2f;
-        private static readonly float SLOP = 0.01f;
+        private static readonly float SLOP = 0.02f;
         private static readonly float VELOCITY_CLAMP_SQRT = 0.01f;
 
         private List<Vector2> positionCorrection = new List<Vector2>();
         private List<Vector2> velocityToAdd = new List<Vector2>();
         //private Vector2 gravity;
         //private Vector2 gravityToAdd;
+
+        private float inertia;
 
         //Verlet integration
         private Vector2 force;
@@ -73,6 +78,25 @@ namespace Phys
 
         private ConcurrentStack<FRawCollision> collisions = new ConcurrentStack<FRawCollision>();
 
+        public override void UpdateAllCollider()
+        {
+            Area = 0f;
+            Mass = 0f;
+            Inertia = 0f;
+
+            for (int i = 0; i < Collider.Length; i++)
+            {
+                if(Collider[i].NeedsBodyUpdate())
+                    Collider[i].UpdateCollisionBody(Density);
+
+                Collider[i].CalculateWSCollisionBody();
+
+                Area += Collider[i].Area;
+                Mass += Collider[i].Mass;
+                Inertia += Collider[i].Inertia;
+            }
+        }
+
         protected override void OnRegister()
         {
             PhysicsEngine.RegisterRigidbody(this);
@@ -96,11 +120,11 @@ namespace Phys
 
                 for (int c1 = 0; c1 < Collider.Length; c1++)
                 {
-                    FAABB2D bounds = other.Collider[c1].CachedBounds;
+                    FAABB2D bounds = other.Collider[c1].CachedBoundsWS;
 
                     for (int c2 = 0; c2 < other.Collider.Length; c2++)
                     {
-                        if (bounds.Intersects(other.Collider[c2].CachedBounds))
+                        if (bounds.Intersects(other.Collider[c2].CachedBoundsWS))
                         {
                             CollisionContact manifold = null;
                             bool isBodyA = false;
@@ -129,11 +153,11 @@ namespace Phys
             {
                 for (int c1 = 0; c1 < Collider.Length; c1++)
                 {
-                    FAABB2D bounds = other.Collider[c1].CachedBounds;
+                    FAABB2D bounds = other.Collider[c1].CachedBoundsWS;
 
                     for (int c2 = 0; c2 < other.Collider.Length; c2++)
                     {
-                        if (bounds.Intersects(other.Collider[c2].CachedBounds))
+                        if (bounds.Intersects(other.Collider[c2].CachedBoundsWS))
                         {
                             CollisionContact manifold = null;
                             bool isBodyA = false;
@@ -181,7 +205,7 @@ namespace Phys
             this.deltaTime = deltaTime;
 
             fWeight = Mass * PhysicsEngine.Instance.Gravity.Multiply(GravityMultiplier);
-            ObjectArea = CachedBounds.Area;
+            ObjectArea = CachedBoundsWS.Area;
 
             force += fWeight;
 
@@ -281,21 +305,21 @@ namespace Phys
         {
             float bounce = (Bounciness + otherObject.Bounciness) * 0.5f;//Mathf.Min(Bounciness, otherObject.Bounciness);
 
-            Vector2 fN = edgeNormalColl * Vector2.Dot(force, edgeNormalColl);
+            Vector2 fN = actualCollisionNormal * Vector2.Dot(force, actualCollisionNormal);
 
             Vector2 impulsVel1 = Vector2.zero;
             Vector2 impulsVel2 = Vector2.zero;
 
-            if (Vector2.Dot(Velocity - otherObject.Velocity, edgeNormalColl) < 0f)
+            if (Vector2.Dot(Velocity - otherObject.Velocity, actualCollisionNormal) < 0f)
             {
-                Vector2 projVelocity = edgeNormalColl * Vector2.Dot(Velocity, edgeNormalColl);
-                Vector2 projOtherVelocity = edgeNormalColl * Vector2.Dot(otherObject.Velocity, edgeNormalColl);
+                Vector2 projVelocity = actualCollisionNormal * Vector2.Dot(Velocity, actualCollisionNormal);
+                Vector2 projOtherVelocity = actualCollisionNormal * Vector2.Dot(otherObject.Velocity, actualCollisionNormal);
 
-                impulsVel1 = CalculateImpulse(projVelocity, projOtherVelocity, Mass, otherObject.Mass, Bounciness, edgeNormalColl);
+                impulsVel1 = CalculateImpulse(projVelocity, projOtherVelocity, Mass, otherObject.Mass, Bounciness);
 
                 if(otherObject.IsRigidbody)
                 {
-                    impulsVel2 = CalculateImpulse(projOtherVelocity, projVelocity, otherObject.Mass, Mass, otherObject.Bounciness, edgeNormal);
+                    impulsVel2 = CalculateImpulse(projOtherVelocity, projVelocity, otherObject.Mass, Mass, otherObject.Bounciness);
 
                     PhysRigidbody otherRigid = otherObject.Body as PhysRigidbody;
 
@@ -318,7 +342,7 @@ namespace Phys
 
                 if (impulsVel1.sqrMagnitude != 0f)
                 {
-                    if (Vector2.Dot(impulsVel1, edgeNormalColl) > 0)
+                    if (Vector2.Dot(impulsVel1, actualCollisionNormal) > 0)
                     {
                         ApplyImpulse(impulsVel1);
                     }
@@ -392,7 +416,7 @@ namespace Phys
             }
         }
 
-        private Vector2 CalculateImpulse(Vector2 velA, Vector2 velB, float massA, float massB, float bounciness, Vector2 edgeNormal)
+        private Vector2 CalculateImpulse(Vector2 velA, Vector2 velB, float massA, float massB, float bounciness)
         {
             Vector2 impulse = Vector2.zero;
 

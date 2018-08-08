@@ -14,10 +14,28 @@ namespace Phys
 
         public bool showBounds;
 
+        [SerializeField]
+        private Vector2 _offset;
+
+        public Vector2 Offset
+        {
+            get { return _offset; }
+            set
+            {
+                _offset = value;
+                IsDirty = true;
+            }
+        }
+
+        protected float oldRotation;
+        protected Vector3 oldScale;
+
+        protected bool needsBoundsUpdate = false;
+
         public bool IsDirty
         {
             get;
-            private set;
+            set;
         }
 
         protected virtual Color BoundsColor
@@ -74,15 +92,31 @@ namespace Phys
         }
 #endif
 
-        public void UpdateCollisionBody()
+        public void UpdateCollisionBody(float density)
         {
-            if (IsDirty)
-                UpdateCollisionBody_internal();
+            UpdateCollisionBody_internal();
+            UpdateBodyInformation_internal(density);
 
+            needsBoundsUpdate = true;
             IsDirty = false;
         }
 
+        protected override bool AreCachedBoundsInvalid()
+        {
+            return needsBoundsUpdate;
+        }
+
+        public virtual void CalculateWSCollisionBody()
+        {
+
+        }
+
         protected virtual void UpdateCollisionBody_internal()
+        {
+
+        }
+
+        protected virtual void UpdateBodyInformation_internal(float density)
         {
 
         }
@@ -94,17 +128,28 @@ namespace Phys
             return false;
         }
 
+        public virtual bool NeedsBodyUpdate()
+        {
+            return IsDirty;
+        }
+
         protected override void OnRegister()
         {
-            IsDirty = true;
-
             if (GetComponent<PhysCompoundCollider>() == null)
                 gameObject.AddComponent<PhysCompoundCollider>();
+
+            IsDirty = true;
         }
 
         protected virtual void FixedUpdate()
         {
-            IsDirty = true;
+            if (oldRotation != transform.rotation.eulerAngles.z || oldScale != transform.localScale)
+            {
+                IsDirty = true;
+            }
+
+            oldRotation = transform.rotation.eulerAngles.z;
+            oldScale = transform.localScale;
         }
     }
 }
