@@ -20,6 +20,9 @@ namespace Phys
 
         public Vector2 MassPoint { get; set; }
 
+        public float InvMass { get; protected set; }
+        public float InvInertia { get; protected set; }
+
         private void OnDrawGizmos()
         {
 #if UNITY_EDITOR
@@ -72,9 +75,11 @@ namespace Phys
                 Collider[i].CalculateWSCollisionBody();
 
                 Area += Collider[i].Area;
-                Mass += Collider[i].Mass;
                 Inertia += Collider[i].Inertia;
             }
+
+            InvMass = Mass == 0f ? 0f : 1f / Mass;
+            InvInertia = Inertia == 0f ? 0f : 1f / Inertia;
         }
 
         protected override FAABB2D EvaluateBounds_internal()

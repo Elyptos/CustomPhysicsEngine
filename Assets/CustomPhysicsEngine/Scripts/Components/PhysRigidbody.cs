@@ -47,9 +47,35 @@ namespace Phys
 
         private struct FCollisionBodyExtractor
         {
-            public float Mass;
             public float Bounciness;
-            public Vector2 Velocity;
+            public Vector2 Velocity
+            {
+                get
+                {
+                    if(IsRigidbody)
+                    {
+                        return ((PhysRigidbody)Body).Velocity;
+                    }
+                    else
+                    {
+                        return Vector2.zero;
+                    }
+                }
+            }
+            public float AngularVelocity
+            {
+                get
+                {
+                    if (IsRigidbody)
+                    {
+                        return ((PhysRigidbody)Body).AngularVelocity;
+                    }
+                    else
+                    {
+                        return 0f;
+                    }
+                }
+            }
             public PhysCompoundCollider Body;
             public bool IsRigidbody;
 
@@ -59,16 +85,12 @@ namespace Phys
                 {
                     PhysRigidbody rigid = compoundCollider as PhysRigidbody;
 
-                    Mass = rigid.Mass;
                     Bounciness = rigid.Bounciness;
-                    Velocity = rigid.Velocity;
                     IsRigidbody = true;
                 }
                 else
                 {
-                    Mass = 0f;
                     Bounciness = float.MaxValue;
-                    Velocity = Vector2.zero;
                     IsRigidbody = false;
                 }
 
@@ -95,6 +117,9 @@ namespace Phys
                 Mass += Collider[i].Mass;
                 Inertia += Collider[i].Inertia;
             }
+
+            InvMass = Mass == 0f ? 0f : 1f / Mass;
+            InvInertia = Inertia == 0f ? 0f : 1f / Inertia;
         }
 
         protected override void OnRegister()
@@ -245,12 +270,16 @@ namespace Phys
                 Velocity += impulse;
             }
 
-            transform.position += (Vector3)(Velocity * Time.fixedDeltaTime);
-
-            force = Vector2.zero;
-
             if (Velocity.sqrMagnitude <= VELOCITY_CLAMP_SQRT)
                 Velocity = Vector2.zero;
+
+            //if (Mathf.Abs(AngularVelocity) <= VELOCITY_CLAMP_SQRT)
+            //    AngularVelocity = 0f;
+
+            transform.position += (Vector3)(Velocity * Time.fixedDeltaTime);
+            transform.rotation *= Quaternion.Euler(0f, 0f, AngularVelocity);
+
+            force = Vector2.zero;
 
             //transform.position = transform.position + (Vector3)Velocity * Time.fixedDeltaTime;
 
@@ -285,11 +314,6 @@ namespace Phys
                     collisionNormal = -collisionNormal;
                 }
 
-                //if ((coll.IsBodyA && coll.CollisionContact.BodyAInc) || (!coll.IsBodyA && !coll.CollisionContact.BodyAInc))
-                //{
-                //    collisionNormal = -collisionNormal;
-                //}
-
                 if (coll.IsBodyA)
                 {
                     ResolveContact(coll.CollisionContact, collisionNormal, edgeNormalColl, edgeNormal, new FCollisionBodyExtractor(coll.CollisionContact.B));
@@ -304,103 +328,219 @@ namespace Phys
         private void ResolveContact(CollisionContact contact, Vector2 actualCollisionNormal, Vector2 edgeNormalColl, Vector2 edgeNormal, FCollisionBodyExtractor otherObject)
         {
             float bounce = (Bounciness + otherObject.Bounciness) * 0.5f;//Mathf.Min(Bounciness, otherObject.Bounciness);
+            float frictionCoef = Mathf.Min(Roughness * 0.1f, otherObject.Body.Roughness * 0.1f);
 
             Vector2 fN = actualCollisionNormal * Vector2.Dot(force, actualCollisionNormal);
 
-            Vector2 impulsVel1 = Vector2.zero;
-            Vector2 impulsVel2 = Vector2.zero;
+            //Vector2 impulsVel1 = Vector2.zero;
+            //Vector2 impulsVel2 = Vector2.zero;
 
-            if (Vector2.Dot(Velocity - otherObject.Velocity, actualCollisionNormal) < 0f)
+            //if (Vector2.Dot(Velocity - otherObject.Velocity, actualCollisionNormal) < 0f)
+            //{
+            //    Vector2 projVelocity = actualCollisionNormal * Vector2.Dot(Velocity, actualCollisionNormal);
+            //    Vector2 projOtherVelocity = actualCollisionNormal * Vector2.Dot(otherObject.Velocity, actualCollisionNormal);
+
+            //    impulsVel1 = CalculateImpulse(projVelocity, projOtherVelocity, Mass, otherObject.Mass, Bounciness);
+
+            //    if(otherObject.IsRigidbody)
+            //    {
+            //        impulsVel2 = CalculateImpulse(projOtherVelocity, projVelocity, otherObject.Mass, Mass, otherObject.Bounciness);
+
+            //        PhysRigidbody otherRigid = otherObject.Body as PhysRigidbody;
+
+            //        if (impulsVel2.sqrMagnitude != 0f)
+            //        {
+            //            if (Vector2.Dot(impulsVel2, edgeNormal) > 0)
+            //            {
+            //                otherRigid.ApplyImpulse(impulsVel2);
+            //            }
+            //            else
+            //            {
+            //                otherRigid.ApplyImpulse(-impulsVel2);
+            //            }
+            //        }
+            //        else
+            //        {
+            //            otherRigid.ApplyImpulse(-projOtherVelocity);
+            //        }
+            //    }
+
+            //    if (impulsVel1.sqrMagnitude != 0f)
+            //    {
+            //        if (Vector2.Dot(impulsVel1, actualCollisionNormal) > 0)
+            //        {
+            //            ApplyImpulse(impulsVel1);
+            //        }
+            //        else
+            //        {
+            //            ApplyImpulse(-impulsVel1);
+            //        }
+            //    }
+            //    else
+            //    {
+            //        ApplyImpulse(-projVelocity);
+            //    }
+            //}
+
+            Vector2 startVel = Velocity;
+            float startAngularVel = AngularVelocity;
+            Vector2 startVelB = otherObject.Velocity;
+            float startAngularVelB = otherObject.AngularVelocity;
+
+            if (contact.ContactPoints == null)
+                return;
+
+            for(int i = 0; i < contact.ContactPoints.Length; i++)
             {
-                Vector2 projVelocity = actualCollisionNormal * Vector2.Dot(Velocity, actualCollisionNormal);
-                Vector2 projOtherVelocity = actualCollisionNormal * Vector2.Dot(otherObject.Velocity, actualCollisionNormal);
+                Vector2 radA = contact.ContactPoints[i] - MassPoint;
+                Vector2 radB = contact.ContactPoints[i] - otherObject.Body.MassPoint;
 
-                impulsVel1 = CalculateImpulse(projVelocity, projOtherVelocity, Mass, otherObject.Mass, Bounciness);
+                Vector2 relVel = startVel + radA.Cross(startAngularVel) - startVelB - radB.Cross(startAngularVelB);
 
-                if(otherObject.IsRigidbody)
+                float contactVel = Vector2.Dot(relVel, actualCollisionNormal);
+
+                if (contactVel < 0)
                 {
-                    impulsVel2 = CalculateImpulse(projOtherVelocity, projVelocity, otherObject.Mass, Mass, otherObject.Bounciness);
+                    float invMassSum = InvMass + otherObject.Body.InvMass + Mathf.Pow(radA.Cross(actualCollisionNormal), 2) * InvInertia + 
+                        Mathf.Pow(radB.Cross(actualCollisionNormal), 2) * otherObject.Body.InvInertia;
 
-                    PhysRigidbody otherRigid = otherObject.Body as PhysRigidbody;
+                    float impulseScalar = -(1f + Bounciness) * contactVel;
+                    impulseScalar /= invMassSum;
+                    impulseScalar /= contact.ContactPoints.Length;
 
-                    if (impulsVel2.sqrMagnitude != 0f)
-                    {
-                        if (Vector2.Dot(impulsVel2, edgeNormal) > 0)
-                        {
-                            otherRigid.ApplyImpulse(impulsVel2);
-                        }
-                        else
-                        {
-                            otherRigid.ApplyImpulse(-impulsVel2);
-                        }
-                    }
-                    else
-                    {
-                        otherRigid.ApplyImpulse(-projOtherVelocity);
-                    }
-                }
+                    Vector2 impulse = actualCollisionNormal * impulseScalar;
 
-                if (impulsVel1.sqrMagnitude != 0f)
-                {
-                    if (Vector2.Dot(impulsVel1, actualCollisionNormal) > 0)
+                    ApplyImpulse(impulse, radA);
+
+                    Vector2 velAImpulse = startVel + InvMass * impulse;
+                    float anVelAImpulse = startAngularVel + InvInertia * radA.Cross(impulse);
+                    Vector2 velAImpulseB = Vector2.zero;
+                    float anVelAImpulseB = 0f;
+
+                    if (otherObject.IsRigidbody)
                     {
-                        ApplyImpulse(impulsVel1);
+                        ((PhysRigidbody)otherObject.Body).ApplyImpulse(-impulse, radB);
+
+                        velAImpulseB = startVelB + otherObject.Body.InvMass * -impulse;
+                        anVelAImpulseB = startAngularVelB + otherObject.Body.InvInertia * radB.Cross(-impulse);
                     }
-                    else
-                    {
-                        ApplyImpulse(-impulsVel1);
-                    }
-                }
-                else
-                {
-                    ApplyImpulse(-projVelocity);
+
+                    //relVel = velAImpulse + radA.Cross(anVelAImpulse) - velAImpulseB - radB.Cross(anVelAImpulseB);
+
+                    //Vector2 movementTangent = relVel - (actualCollisionNormal * Vector2.Dot(relVel, actualCollisionNormal));
+                    //movementTangent.Normalize();
+
+                    //float tangentMag = -Vector2.Dot(relVel, movementTangent);
+                    //tangentMag /= invMassSum;
+                    //tangentMag /= contact.ContactPoints.Length;
+
+                    //if (tangentMag.DeltaEquals(0f, 0.0001f))
+                    //    return;
+
+                    //Vector2 tangentImpulse;
+
+                    //if (Mathf.Abs(tangentMag) < impulseScalar * frictionCoef)
+                    //    tangentImpulse = movementTangent * tangentMag;
+                    //else
+                    //    tangentImpulse = movementTangent * -impulseScalar * frictionCoef;
+
+                    //ApplyImpulse(tangentImpulse, radA);
+
+                    //if (otherObject.IsRigidbody)
+                    //{
+                    //    ((PhysRigidbody)otherObject.Body).ApplyImpulse(-tangentImpulse, radB);
+                    //}
+
+
+
+
+                    //Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
+                    //Vector2 frictionVel;
+                    //Vector2 friction;
+
+                    //float tanDot = Vector2.Dot(movementTangent, velAImpulse);
+
+                    //if (tanDot > 0)
+                    //{
+                    //    frictionVel = (movementTangent * tanDot) / contact.ContactPoints.Length;
+                    //    friction = (movementTangent * frictionCoef) / contact.ContactPoints.Length;
+
+
+                    //    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+                    //    {
+                    //        //velocityToAdd.Add(-friction);
+                    //        ApplyImpulse(-friction, radA);
+                    //    }
+                    //    else
+                    //    {
+                    //        //velocityToAdd.Add(-frictionVel);
+                    //        ApplyImpulse(-frictionVel, radA);
+                    //    }
+                    //}
+                    //else if (tanDot < 0)
+                    //{
+                    //    frictionVel = (-movementTangent * -tanDot) / contact.ContactPoints.Length;
+                    //    friction = (-movementTangent * frictionCoef) / contact.ContactPoints.Length;
+
+
+                    //    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+                    //    {
+                    //        //velocityToAdd.Add(-friction);
+                    //        ApplyImpulse(-friction, radA);
+                    //    }
+                    //    else
+                    //    {
+                    //        //velocityToAdd.Add(-frictionVel);
+                    //        ApplyImpulse(-frictionVel, radA);
+                    //    }
+                    //}
                 }
             }
 
-            if (!impulseApplied)
-            {
-                float frictionCoef = Mathf.Min(Roughness * 0.1f, otherObject.Body.Roughness * 0.1f);
-                Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
-                Vector2 frictionVel;
-                Vector2 friction;
+            //if (!impulseApplied)
+            //{
+            //    //float frictionCoef = Mathf.Min(Roughness * 0.1f, otherObject.Body.Roughness * 0.1f);
+            //    Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
+            //    Vector2 frictionVel;
+            //    Vector2 friction;
 
-                float tanDot = Vector2.Dot(movementTangent, Velocity);
+            //    float tanDot = Vector2.Dot(movementTangent, Velocity);
 
-                if (tanDot > 0)
-                {
-                    frictionVel = movementTangent * tanDot;
-                    friction = movementTangent * frictionCoef;
-
-
-                    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-                    {
-                        //velocityToAdd.Add(-friction);
-                        ApplyImpulse(-friction);
-                    }
-                    else
-                    {
-                        //velocityToAdd.Add(-frictionVel);
-                        ApplyImpulse(-frictionVel);
-                    }
-                }
-                else if (tanDot < 0)
-                {
-                    frictionVel = -movementTangent * -tanDot;
-                    friction = -movementTangent * frictionCoef;
+            //    if (tanDot > 0)
+            //    {
+            //        frictionVel = movementTangent * tanDot;
+            //        friction = movementTangent * frictionCoef;
 
 
-                    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-                    {
-                        //velocityToAdd.Add(-friction);
-                        ApplyImpulse(-friction);
-                    }
-                    else
-                    {
-                        //velocityToAdd.Add(-frictionVel);
-                        ApplyImpulse(-frictionVel);
-                    }
-                }
-            }
+            //        if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+            //        {
+            //            //velocityToAdd.Add(-friction);
+            //            ApplyImpulse(-friction);
+            //        }
+            //        else
+            //        {
+            //            //velocityToAdd.Add(-frictionVel);
+            //            ApplyImpulse(-frictionVel);
+            //        }
+            //    }
+            //    else if (tanDot < 0)
+            //    {
+            //        frictionVel = -movementTangent * -tanDot;
+            //        friction = -movementTangent * frictionCoef;
+
+
+            //        if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+            //        {
+            //            //velocityToAdd.Add(-friction);
+            //            ApplyImpulse(-friction);
+            //        }
+            //        else
+            //        {
+            //            //velocityToAdd.Add(-frictionVel);
+            //            ApplyImpulse(-frictionVel);
+            //        }
+            //    }
+            //}
 
             if (Vector2.Dot(force, edgeNormalColl) < 0f)
             {
@@ -435,9 +575,10 @@ namespace Phys
             return impulse;
         }
 
-        protected void ApplyImpulse(Vector2 impulse)
+        protected void ApplyImpulse(Vector2 impulse, Vector2 contact)
         {
-            Velocity += impulse;
+            Velocity += InvMass * impulse;
+            AngularVelocity += InvInertia * contact.Cross(impulse);
 
             impulseApplied = true;
         }

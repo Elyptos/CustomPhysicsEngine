@@ -60,7 +60,7 @@ MonoBehaviour:
   Acceleration: {x: 0, y: 0}
   GravityMultiplier: {x: 1, y: 1}
   Density: 1.175
-  Bounciness: 0.5
+  Bounciness: 0.9
   VolumeDensity: 1.2
   DragCoefficient: 0.45
 --- !u!114 &114841329143736870
