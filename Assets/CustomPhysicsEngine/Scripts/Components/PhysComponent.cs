@@ -49,8 +49,7 @@ namespace Phys
 
         private void OnDisable()
         {
-            if (gameObject.activeInHierarchy)
-                OnUnregister();
+            OnUnregister();
         }
 
         protected virtual bool AreCachedBoundsInvalid()
@@ -58,19 +57,9 @@ namespace Phys
             return true;
         }
 
-        public virtual void PhysicsUpdate(float deltaTime)
-        {
-
-        }
-
-        public virtual void PostPhysicsUpdate()
-        {
-
-        }
-
         protected virtual void OnRegister()
         {
-
+            
         }
 
         protected virtual void OnUnregister()

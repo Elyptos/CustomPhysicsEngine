@@ -53,16 +53,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Roughness: 0.5
+  IsTrigger: 0
   Collider: []
   showBoundsInGame: 0
   Velocity: {x: 0, y: 0}
   AngularVelocity: 0
   Acceleration: {x: 0, y: 0}
+  AngularAcceleration: 0
   GravityMultiplier: {x: 1, y: 1}
   Density: 1.175
-  Bounciness: 0.9
+  Bounciness: 0.1
   VolumeDensity: 1.2
   DragCoefficient: 0.45
+  LockAxis:
+    LockX: 0
+    LockY: 0
+    LockRotation: 0
 --- !u!114 &114841329143736870
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -75,5 +81,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   showBounds: 0
+  showCollider: 1
   _offset: {x: 0, y: 0}
   _radius: 0.5

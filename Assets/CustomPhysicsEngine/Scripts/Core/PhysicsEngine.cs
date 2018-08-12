@@ -28,11 +28,36 @@ namespace Phys
         public Vector2 Gravity = new Vector2(0.0f, -9.81f);
         public bool ParallelOperation = true;
 
+        private Dictionary<int, bool> collisionMatrix = new Dictionary<int, bool>();
+
         private static bool _isRunning;
+
+        public static PhysicsEventManager EventManager { get; set; } = new PhysicsEventManager();
 
         public static bool IsRunning
         {
             get { return _instance != null && _isRunning; }
+        }
+
+        public static void ApplyExplosion(Vector2 origin, float intensity, float radius, float falloffRadius)
+        {
+            float radSqr = intensity * intensity;
+            float fradSqr = Mathf.Max(falloffRadius * falloffRadius, 0.001f);
+
+            Parallel.ForEach(rigidbodiesList, rigid =>
+            {
+                float lenSqr = (origin - rigid.MassPoint).sqrMagnitude;
+                float forceInt = (1.0f - Mathf.Clamp((lenSqr - radSqr) / fradSqr, 0f, 1f)) * intensity;
+
+                rigid.AddForce((rigid.MassPoint - origin).normalized * forceInt, rigid.MassPoint);
+            });
+        }
+
+        public static bool IsLayerCollisionAllowed(int layer1, int layer2)
+        {
+            int index = (layer1 << 6) | layer2;
+
+            return Instance.collisionMatrix[index];
         }
 
         public static void RegisterCollider(PhysCompoundCollider coll)
@@ -134,6 +159,8 @@ namespace Phys
             if (IsRunning)
                 StopEngine();
 
+            CopyUnityCollisionMatrix();
+
             StartCoroutine("PhysicsLoop");
         }
 
@@ -142,6 +169,24 @@ namespace Phys
             _isRunning = false;
 
             StopCoroutine("PhysicsLoop");
+        }
+
+        private void CopyUnityCollisionMatrix()
+        {
+            collisionMatrix.Clear();
+
+            for(int i = 0; i < 32; i++)
+            {
+                for(int j = 0; j < 32; j++)
+                {
+                    int index = (i << 6) | j;
+
+                    if(!collisionMatrix.ContainsKey(index))
+                    {
+                        collisionMatrix.Add(index, Physics.GetIgnoreLayerCollision(i, j));
+                    }
+                }
+            }
         }
 
         private bool ShouldPerformCollisionDetection(uint a, uint b)
@@ -198,6 +243,9 @@ namespace Phys
 
                     foreach (PhysRigidbody rigid2 in rigidbodiesList)
                     {
+                        if (IsLayerCollisionAllowed(rigid.CollisionLayer, rigid2.CollisionLayer))
+                            continue;
+
                         if (ShouldPerformCollisionDetection(id1, idLookUp[rigid2]))
                         {
                             if(rigid.CachedBoundsWS.Intersects(rigid2.CachedBoundsWS))
@@ -209,6 +257,9 @@ namespace Phys
 
                     foreach(PhysCompoundCollider collider in colliderList)
                     {
+                        if (IsLayerCollisionAllowed(rigid.CollisionLayer, collider.CollisionLayer))
+                            continue;
+
                         if (ShouldPerformCollisionDetection(id1, idLookUp[collider]))
                         {
                             if (rigid.CachedBoundsWS.Intersects(collider.CachedBoundsWS))
@@ -221,10 +272,30 @@ namespace Phys
 
                 float deltaTime = Time.fixedDeltaTime;
 
-                Parallel.ForEach(rigidbodiesList, options, rigid =>
+                //Parallel.ForEach(rigidbodiesList, options, rigid =>
+                //{
+                //    rigid.PhysicsUpdate(deltaTime);
+                //});
+
+                //Iterate savely through list because destruction of entries can occur in this step.
+                LinkedListNode<PhysRigidbody> e = rigidbodiesList.First;
+
+                while(e != null)
+                {
+                    e.Value.PrePhysicsUpdate();
+
+                    e = e.Next;
+                }
+
+                //foreach(PhysRigidbody rigid in rigidbodiesList)
+                //{
+                //    rigid.PrePhysicsUpdate();
+                //}
+
+                foreach(PhysRigidbody rigid in rigidbodiesList)
                 {
                     rigid.PhysicsUpdate(deltaTime);
-                });
+                }
 
                 foreach(PhysRigidbody rigid in rigidbodiesList)
                 {

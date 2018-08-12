@@ -13,6 +13,7 @@ namespace Phys
         protected const float FILL_COLOR_ALPHA = 0.1f;
 
         public bool showBounds;
+        public bool showCollider = true;
 
         [SerializeField]
         private Vector2 _offset;
@@ -48,9 +49,9 @@ namespace Phys
             get { return Color.black; }
         }
 
+#if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-#if UNITY_EDITOR
             Color handleColor = Handles.color;
 
             if (showBounds)
@@ -59,9 +60,12 @@ namespace Phys
                 DrawBounds();
             }
 
-            Handles.color = ColliderColor;
+            if(showCollider)
+            {
+                Handles.color = ColliderColor;
 
-            DrawCollider();
+                DrawCollider();
+            }
 
             Handles.color = handleColor;
         }

@@ -356,8 +356,8 @@ namespace Phys
             {
                 manifold.Normal = -collisionAxis.Axis;
                 manifold.BodyAInc = collisionAxis.BodyA;
-                manifold.EdgeNormalA = !manifold.BodyAInc ? eInc.Normal : eRef.Normal;
-                manifold.EdgeNormalB = !manifold.BodyAInc ? eRef.Normal : eInc.Normal;
+                manifold.EdgeNormalA = manifold.BodyAInc ? eInc.Normal : eRef.Normal;
+                manifold.EdgeNormalB = manifold.BodyAInc ? eRef.Normal : eInc.Normal;
             }
             else
             {

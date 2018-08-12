@@ -2,45 +2,16 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Phys
 {
     public class PhysRigidbody : PhysCompoundCollider
     {
-        public Vector2 Velocity;
-        public float AngularVelocity;
-        public Vector2 Acceleration;
-
-        public Vector2 GravityMultiplier = Vector2.one;
-        //public float Mass = 1f;
-        public float Density = 1.175f;
-        public float Bounciness = 0.9f;
-        public float VolumeDensity = 1.2f;
-        public float DragCoefficient = 0.45f;
-
-        private static readonly float POSITION_CORRECTION_MOD = 0.2f;
-        private static readonly float SLOP = 0.02f;
-        private static readonly float VELOCITY_CLAMP_SQRT = 0.01f;
-
-        private List<Vector2> positionCorrection = new List<Vector2>();
-        private List<Vector2> velocityToAdd = new List<Vector2>();
-        //private Vector2 gravity;
-        //private Vector2 gravityToAdd;
-
-        private float inertia;
-
-        //Verlet integration
-        private Vector2 force;
-        private Vector2 fWeight;
-        private Vector2 fVolumeRes;
-        private float ObjectArea;
-        private bool impulseApplied;
-
-        private float deltaTime;
 
         private struct FRawCollision
-        { 
+        {
             public CollisionContact CollisionContact;
             public bool IsBodyA;
         }
@@ -52,7 +23,7 @@ namespace Phys
             {
                 get
                 {
-                    if(IsRigidbody)
+                    if (IsRigidbody)
                     {
                         return ((PhysRigidbody)Body).Velocity;
                     }
@@ -81,7 +52,7 @@ namespace Phys
 
             public FCollisionBodyExtractor(PhysCompoundCollider compoundCollider)
             {
-                if(compoundCollider is PhysRigidbody)
+                if (compoundCollider is PhysRigidbody)
                 {
                     PhysRigidbody rigid = compoundCollider as PhysRigidbody;
 
@@ -97,6 +68,50 @@ namespace Phys
                 Body = compoundCollider;
             }
         }
+
+        [System.Serializable]
+        public struct FAxisLock
+        {
+            public bool LockX;
+            public bool LockY;
+            public bool LockRotation;
+        }
+
+        public Vector2 Velocity;
+        public float AngularVelocity;
+        public Vector2 Acceleration;
+        public float AngularAcceleration;
+
+        public Vector2 GravityMultiplier = Vector2.one;
+        public float Density = 1.175f;
+        public float Bounciness = 0.9f;
+        public float VolumeDensity = 1.2f;
+        public float DragCoefficient = 0.45f;
+
+        public Vector2 ExternalForce { get; private set; }
+        public float ExternalTorque { get; private set; }
+
+        public FAxisLock LockAxis = new FAxisLock();
+
+        private ConcurrentDictionary<PhysCompoundCollider, byte> componentsInCollision = new ConcurrentDictionary<PhysCompoundCollider, byte>();
+
+        private static readonly float POSITION_CORRECTION_MOD = 0.2f;
+        private static readonly float SLOP = 0.02f;
+        private static readonly float VELOCITY_CLAMP_SQRT = 0.001f;
+        private static readonly float ANGULAR_VELOCITY_CLAMP = 0.001f;
+
+        private List<Vector2> positionCorrection = new List<Vector2>();
+
+        private float inertia;
+
+        private Vector2 force;
+        private float torque;
+        private Vector2 fWeight;
+        private Vector2 fVolumeVelocityRes;
+        private float ObjectArea;
+        private bool impulseApplied;
+
+        private float deltaTime;
 
         private ConcurrentStack<FRawCollision> collisions = new ConcurrentStack<FRawCollision>();
 
@@ -125,16 +140,49 @@ namespace Phys
         protected override void OnRegister()
         {
             PhysicsEngine.RegisterRigidbody(this);
+
+            IsValid = true;
         }
 
         protected override void OnUnregister()
         {
+            IsValid = false;
+            ExitFromAllCollisions();
+
             PhysicsEngine.UnregisterRigidbody(this);
+        }
+
+        public void AddForce(Vector2 force, Vector2 forceLocation)
+        {
+            ExternalForce += force;
+
+            AddTorque(force, forceLocation);
+        }
+
+        public void AddTorque(Vector2 force, Vector2 forceLocation)
+        {
+            Vector2 rad = forceLocation - MassPoint;
+            Vector2 normal = new Vector2(-force.y, force.x);
+
+            if (!Vector2.Dot(normal, rad).DeltaEquals(0f, 0.01f))
+            {
+                ExternalTorque += rad.Cross(force);
+            }
+        }
+
+        public void AddImpulse(Vector2 direction, float intensity, Vector2 impulseLocation)
+        {
+            ApplyImpulse(direction * intensity, impulseLocation - (Vector2)transform.position);
         }
 
         public void RegisterCollision(CollisionContact collision, bool isBodyA)
         {
             collisions.Push(new FRawCollision() { CollisionContact = collision, IsBodyA = isBodyA });
+
+            if(!componentsInCollision.ContainsKey(isBodyA ? collision.B : collision.A))
+            {
+                componentsInCollision.TryAdd(isBodyA ? collision.B : collision.A, 0);
+            }
         }
 
         public void GatherCollisionInformation(PhysCompoundCollider other)
@@ -208,16 +256,48 @@ namespace Phys
             }
         }
 
-        private void FixedUpdate()
-        {
-            
-        }
-
         public override void Warmup()
         {
             base.Warmup();
 
             impulseApplied = false;
+            componentsInCollision.Clear();
+        }
+
+        public override void PrePhysicsUpdate()
+        {
+            base.PrePhysicsUpdate();
+
+            ConcurrentQueue<PhysCompoundCollider> colliderToTriggerExit = new ConcurrentQueue<PhysCompoundCollider>();
+            ConcurrentQueue<PhysCompoundCollider> colliderToTriggerEnter = new ConcurrentQueue<PhysCompoundCollider>();
+
+            Parallel.ForEach(collisionSet, elem =>
+            {
+                if (!componentsInCollision.ContainsKey(elem))
+                {
+                    colliderToTriggerExit.Enqueue(elem);
+                }
+            });
+
+            Parallel.ForEach(componentsInCollision, elem =>
+            {
+                if (!collisionSet.Contains(elem.Key))
+                {
+                    colliderToTriggerEnter.Enqueue(elem.Key);
+                }
+            });
+
+            PhysCompoundCollider coll;
+
+            while (colliderToTriggerExit.TryDequeue(out coll))
+            {
+                TriggerCollisionExit(coll);
+            }
+
+            while(colliderToTriggerEnter.TryDequeue(out coll))
+            {
+                TriggerCollisionEnter(coll);
+            }
         }
 
         public override void PhysicsUpdate(float deltaTime)
@@ -225,7 +305,6 @@ namespace Phys
             base.PhysicsUpdate(deltaTime);
 
             positionCorrection.Clear();
-            velocityToAdd.Clear();
 
             this.deltaTime = deltaTime;
 
@@ -233,56 +312,46 @@ namespace Phys
             ObjectArea = CachedBoundsWS.Area;
 
             force += fWeight;
+            force += ExternalForce;
 
-            //positionCorrection.Clear();
-            //gravityToAdd = (PhysicsEngine.Instance.Gravity.Multiply(GravityMultiplier) * deltaTime);
-            //gravity = gravityToAdd;
+            torque += ExternalTorque;
 
             ResolveCollision();
 
             if (Velocity.sqrMagnitude <= VELOCITY_CLAMP_SQRT)
                 Velocity = Vector2.zero;
 
-            fVolumeRes = (VolumeDensity * DragCoefficient * Velocity * Velocity) * 0.5f;
-            fVolumeRes = -Velocity.normalized * fVolumeRes.magnitude;
-            force += fVolumeRes;
-
-            //Velocity += gravityToAdd;
+            fVolumeVelocityRes = (VolumeDensity * DragCoefficient * Velocity * Velocity) * 0.5f;
+            fVolumeVelocityRes = -Velocity.normalized * fVolumeVelocityRes.magnitude;
+            force += fVolumeVelocityRes;
         }
 
         public override void PostPhysicsUpdate()
         {
             Acceleration = force / Mass;
+            AngularAcceleration = torque / Inertia;
 
             Velocity += Acceleration * Time.fixedDeltaTime;
+            AngularVelocity += AngularAcceleration * Time.fixedDeltaTime;
 
-            if(velocityToAdd.Count > 0)
-            {
-                Vector2 impulse = Vector2.zero;
+            Velocity.x = LockAxis.LockX ? 0f : Velocity.x;
+            Velocity.y = LockAxis.LockY ? 0f : Velocity.y;
 
-                foreach (var elem in velocityToAdd)
-                {
-                    impulse += elem;
-                }
-
-                impulse /= velocityToAdd.Count;
-
-                Velocity += impulse;
-            }
+            AngularVelocity = LockAxis.LockRotation ? 0f : AngularVelocity;
 
             if (Velocity.sqrMagnitude <= VELOCITY_CLAMP_SQRT)
                 Velocity = Vector2.zero;
 
-            //if (Mathf.Abs(AngularVelocity) <= VELOCITY_CLAMP_SQRT)
+            //if (Mathf.Abs(AngularVelocity) <= ANGULAR_VELOCITY_CLAMP)
             //    AngularVelocity = 0f;
 
             transform.position += (Vector3)(Velocity * Time.fixedDeltaTime);
             transform.rotation *= Quaternion.Euler(0f, 0f, AngularVelocity);
 
             force = Vector2.zero;
-
-            //transform.position = transform.position + (Vector3)Velocity * Time.fixedDeltaTime;
-
+            torque = 0f;
+            ExternalForce = Vector2.zero;
+            ExternalTorque = 0f;
 
             if (positionCorrection.Count > 0)
             {
@@ -305,6 +374,9 @@ namespace Phys
 
             while (collisions.TryPop(out coll))
             {
+                if (coll.CollisionContact.A.IsTrigger || coll.CollisionContact.B.IsTrigger)
+                    continue;
+
                 Vector2 edgeNormalColl = coll.IsBodyA ? coll.CollisionContact.EdgeNormalB : coll.CollisionContact.EdgeNormalA;
                 Vector2 edgeNormal = coll.IsBodyA ? coll.CollisionContact.EdgeNormalA : coll.CollisionContact.EdgeNormalB;
                 Vector2 collisionNormal = coll.CollisionContact.Normal;
@@ -332,215 +404,90 @@ namespace Phys
 
             Vector2 fN = actualCollisionNormal * Vector2.Dot(force, actualCollisionNormal);
 
-            //Vector2 impulsVel1 = Vector2.zero;
-            //Vector2 impulsVel2 = Vector2.zero;
-
-            //if (Vector2.Dot(Velocity - otherObject.Velocity, actualCollisionNormal) < 0f)
-            //{
-            //    Vector2 projVelocity = actualCollisionNormal * Vector2.Dot(Velocity, actualCollisionNormal);
-            //    Vector2 projOtherVelocity = actualCollisionNormal * Vector2.Dot(otherObject.Velocity, actualCollisionNormal);
-
-            //    impulsVel1 = CalculateImpulse(projVelocity, projOtherVelocity, Mass, otherObject.Mass, Bounciness);
-
-            //    if(otherObject.IsRigidbody)
-            //    {
-            //        impulsVel2 = CalculateImpulse(projOtherVelocity, projVelocity, otherObject.Mass, Mass, otherObject.Bounciness);
-
-            //        PhysRigidbody otherRigid = otherObject.Body as PhysRigidbody;
-
-            //        if (impulsVel2.sqrMagnitude != 0f)
-            //        {
-            //            if (Vector2.Dot(impulsVel2, edgeNormal) > 0)
-            //            {
-            //                otherRigid.ApplyImpulse(impulsVel2);
-            //            }
-            //            else
-            //            {
-            //                otherRigid.ApplyImpulse(-impulsVel2);
-            //            }
-            //        }
-            //        else
-            //        {
-            //            otherRigid.ApplyImpulse(-projOtherVelocity);
-            //        }
-            //    }
-
-            //    if (impulsVel1.sqrMagnitude != 0f)
-            //    {
-            //        if (Vector2.Dot(impulsVel1, actualCollisionNormal) > 0)
-            //        {
-            //            ApplyImpulse(impulsVel1);
-            //        }
-            //        else
-            //        {
-            //            ApplyImpulse(-impulsVel1);
-            //        }
-            //    }
-            //    else
-            //    {
-            //        ApplyImpulse(-projVelocity);
-            //    }
-            //}
-
             Vector2 startVel = Velocity;
             float startAngularVel = AngularVelocity;
             Vector2 startVelB = otherObject.Velocity;
             float startAngularVelB = otherObject.AngularVelocity;
 
-            if (contact.ContactPoints == null)
-                return;
-
-            for(int i = 0; i < contact.ContactPoints.Length; i++)
+            if (contact.ContactPoints != null)
             {
-                Vector2 radA = contact.ContactPoints[i] - MassPoint;
-                Vector2 radB = contact.ContactPoints[i] - otherObject.Body.MassPoint;
 
-                Vector2 relVel = startVel + radA.Cross(startAngularVel) - startVelB - radB.Cross(startAngularVelB);
-
-                float contactVel = Vector2.Dot(relVel, actualCollisionNormal);
-
-                if (contactVel < 0)
+                for (int i = 0; i < contact.ContactPoints.Length; i++)
                 {
-                    float invMassSum = InvMass + otherObject.Body.InvMass + Mathf.Pow(radA.Cross(actualCollisionNormal), 2) * InvInertia + 
-                        Mathf.Pow(radB.Cross(actualCollisionNormal), 2) * otherObject.Body.InvInertia;
+                    Vector2 radA = contact.ContactPoints[i] - MassPoint;
+                    Vector2 radB = contact.ContactPoints[i] - otherObject.Body.MassPoint;
 
-                    float impulseScalar = -(1f + Bounciness) * contactVel;
-                    impulseScalar /= invMassSum;
-                    impulseScalar /= contact.ContactPoints.Length;
+                    Vector2 relVel = startVel + radA.Cross(startAngularVel) - startVelB - radB.Cross(startAngularVelB);
 
-                    Vector2 impulse = actualCollisionNormal * impulseScalar;
+                    //Vector2 relVel = startVel - startVelB;
 
-                    ApplyImpulse(impulse, radA);
+                    float contactVel = Vector2.Dot(relVel, actualCollisionNormal);
 
-                    Vector2 velAImpulse = startVel + InvMass * impulse;
-                    float anVelAImpulse = startAngularVel + InvInertia * radA.Cross(impulse);
-                    Vector2 velAImpulseB = Vector2.zero;
-                    float anVelAImpulseB = 0f;
-
-                    if (otherObject.IsRigidbody)
+                    if (contactVel < 0)
                     {
-                        ((PhysRigidbody)otherObject.Body).ApplyImpulse(-impulse, radB);
+                        float invMassSum = InvMass + otherObject.Body.InvMass + Mathf.Pow(radA.Cross(actualCollisionNormal), 2) * InvInertia +
+                            Mathf.Pow(radB.Cross(actualCollisionNormal), 2) * otherObject.Body.InvInertia;
 
-                        velAImpulseB = startVelB + otherObject.Body.InvMass * -impulse;
-                        anVelAImpulseB = startAngularVelB + otherObject.Body.InvInertia * radB.Cross(-impulse);
+                        float impulseScalar = -(1f + Bounciness) * contactVel;
+                        impulseScalar /= invMassSum;
+                        impulseScalar /= contact.ContactPoints.Length;
+
+                        Vector2 impulse = actualCollisionNormal * impulseScalar;
+
+                        ApplyImpulse(impulse, radA);
+
+                        Vector2 velAImpulse = startVel + InvMass * impulse;
+                        float anVelAImpulse = startAngularVel + InvInertia * radA.Cross(impulse);
+                        Vector2 velAImpulseB = Vector2.zero;
+                        float anVelAImpulseB = 0f;
+
+                        if (otherObject.IsRigidbody)
+                        {
+                            ((PhysRigidbody)otherObject.Body).ApplyImpulse(-impulse, radB);
+
+                            velAImpulseB = startVelB + otherObject.Body.InvMass * -impulse;
+                            anVelAImpulseB = startAngularVelB + otherObject.Body.InvInertia * radB.Cross(-impulse);
+                        }
+
+                        Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
+                        Vector2 frictionVel;
+                        Vector2 friction;
+
+                        float tanDot = Vector2.Dot(movementTangent, velAImpulse);
+
+                        if (tanDot > 0)
+                        {
+                            frictionVel = (movementTangent * tanDot) / contact.ContactPoints.Length;
+                            friction = (movementTangent * frictionCoef) / contact.ContactPoints.Length;
+
+
+                            if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+                            {
+                                ApplyImpulse(-friction, radA);
+                            }
+                            else
+                            {
+                                ApplyImpulse(-frictionVel, radA);
+                            }
+                        }
+                        else if (tanDot < 0)
+                        {
+                            frictionVel = (-movementTangent * -tanDot) / contact.ContactPoints.Length;
+                            friction = (-movementTangent * frictionCoef) / contact.ContactPoints.Length;
+
+
+                            if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
+                            {
+                                ApplyImpulse(-friction, radA);
+                            }
+                            else
+                            {
+                                ApplyImpulse(-frictionVel, radA);
+                            }
+                        }
                     }
-
-                    //relVel = velAImpulse + radA.Cross(anVelAImpulse) - velAImpulseB - radB.Cross(anVelAImpulseB);
-
-                    //Vector2 movementTangent = relVel - (actualCollisionNormal * Vector2.Dot(relVel, actualCollisionNormal));
-                    //movementTangent.Normalize();
-
-                    //float tangentMag = -Vector2.Dot(relVel, movementTangent);
-                    //tangentMag /= invMassSum;
-                    //tangentMag /= contact.ContactPoints.Length;
-
-                    //if (tangentMag.DeltaEquals(0f, 0.0001f))
-                    //    return;
-
-                    //Vector2 tangentImpulse;
-
-                    //if (Mathf.Abs(tangentMag) < impulseScalar * frictionCoef)
-                    //    tangentImpulse = movementTangent * tangentMag;
-                    //else
-                    //    tangentImpulse = movementTangent * -impulseScalar * frictionCoef;
-
-                    //ApplyImpulse(tangentImpulse, radA);
-
-                    //if (otherObject.IsRigidbody)
-                    //{
-                    //    ((PhysRigidbody)otherObject.Body).ApplyImpulse(-tangentImpulse, radB);
-                    //}
-
-
-
-
-                    //Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
-                    //Vector2 frictionVel;
-                    //Vector2 friction;
-
-                    //float tanDot = Vector2.Dot(movementTangent, velAImpulse);
-
-                    //if (tanDot > 0)
-                    //{
-                    //    frictionVel = (movementTangent * tanDot) / contact.ContactPoints.Length;
-                    //    friction = (movementTangent * frictionCoef) / contact.ContactPoints.Length;
-
-
-                    //    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-                    //    {
-                    //        //velocityToAdd.Add(-friction);
-                    //        ApplyImpulse(-friction, radA);
-                    //    }
-                    //    else
-                    //    {
-                    //        //velocityToAdd.Add(-frictionVel);
-                    //        ApplyImpulse(-frictionVel, radA);
-                    //    }
-                    //}
-                    //else if (tanDot < 0)
-                    //{
-                    //    frictionVel = (-movementTangent * -tanDot) / contact.ContactPoints.Length;
-                    //    friction = (-movementTangent * frictionCoef) / contact.ContactPoints.Length;
-
-
-                    //    if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-                    //    {
-                    //        //velocityToAdd.Add(-friction);
-                    //        ApplyImpulse(-friction, radA);
-                    //    }
-                    //    else
-                    //    {
-                    //        //velocityToAdd.Add(-frictionVel);
-                    //        ApplyImpulse(-frictionVel, radA);
-                    //    }
-                    //}
                 }
             }
-
-            //if (!impulseApplied)
-            //{
-            //    //float frictionCoef = Mathf.Min(Roughness * 0.1f, otherObject.Body.Roughness * 0.1f);
-            //    Vector2 movementTangent = new Vector2(-edgeNormalColl.y, edgeNormalColl.x);
-            //    Vector2 frictionVel;
-            //    Vector2 friction;
-
-            //    float tanDot = Vector2.Dot(movementTangent, Velocity);
-
-            //    if (tanDot > 0)
-            //    {
-            //        frictionVel = movementTangent * tanDot;
-            //        friction = movementTangent * frictionCoef;
-
-
-            //        if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-            //        {
-            //            //velocityToAdd.Add(-friction);
-            //            ApplyImpulse(-friction);
-            //        }
-            //        else
-            //        {
-            //            //velocityToAdd.Add(-frictionVel);
-            //            ApplyImpulse(-frictionVel);
-            //        }
-            //    }
-            //    else if (tanDot < 0)
-            //    {
-            //        frictionVel = -movementTangent * -tanDot;
-            //        friction = -movementTangent * frictionCoef;
-
-
-            //        if (frictionVel.sqrMagnitude > friction.sqrMagnitude)
-            //        {
-            //            //velocityToAdd.Add(-friction);
-            //            ApplyImpulse(-friction);
-            //        }
-            //        else
-            //        {
-            //            //velocityToAdd.Add(-frictionVel);
-            //            ApplyImpulse(-frictionVel);
-            //        }
-            //    }
-            //}
 
             if (Vector2.Dot(force, edgeNormalColl) < 0f)
             {
@@ -556,31 +503,111 @@ namespace Phys
             }
         }
 
-        private Vector2 CalculateImpulse(Vector2 velA, Vector2 velB, float massA, float massB, float bounciness)
-        {
-            Vector2 impulse = Vector2.zero;
-
-            if(massB == 0f)
-            {
-                impulse = -velA;
-            }
-            else
-            {
-                impulse = (massA * velA + massB * (2 * -velB - velA)) / (massA + massB);
-            }
-
-            //impulse = impulse * (1 + bounciness);
-            impulse = (velA - impulse) * bounciness;
-
-            return impulse;
-        }
-
         protected void ApplyImpulse(Vector2 impulse, Vector2 contact)
         {
             Velocity += InvMass * impulse;
-            AngularVelocity += InvInertia * contact.Cross(impulse);
+
+            Vector2 normal = new Vector2(-impulse.y, impulse.x);
+
+            //if(!Vector2.Dot(normal, contact).DeltaEquals(0f, 0.01f))
+                AngularVelocity += InvInertia * contact.Cross(impulse);
 
             impulseApplied = true;
+        }
+
+        protected void ApplyTorque(Vector2 force, Vector2 rad)
+        {
+            Vector2 normal = new Vector2(-force.y, force.x);
+
+            if (!Vector2.Dot(normal, rad).DeltaEquals(0f, 0.01f))
+            {
+                torque += rad.Cross(force);
+            }
+        }
+
+        protected void TriggerCollisionEnter(PhysCompoundCollider other)
+        {
+            if(other.IsValid)
+                collisionSet.Add(other);
+
+            FCollision collision = new FCollision()
+            {
+                Other = other.gameObject,
+                OtherCollider = other,
+                OtherRigidbody = other as PhysRigidbody
+            };
+
+            if(other.IsTrigger || IsTrigger)
+            {
+                PhysicsEngine.EventManager.InvokeTriggerEnter(gameObject, collision);
+            }
+            else
+            {
+                PhysicsEngine.EventManager.InvokeCollisionEnter(gameObject, collision);
+            }
+
+            if(collision.OtherRigidbody == null)
+            {
+                other.RemoteRegisterCollision(this);
+
+                collision = new FCollision()
+                {
+                    Other = this.gameObject,
+                    OtherCollider = this,
+                    OtherRigidbody = this
+                };
+
+                if (other.IsTrigger || IsTrigger)
+                {
+                    PhysicsEngine.EventManager.InvokeTriggerEnter(other.gameObject, collision);
+                }
+                else
+                {
+                    PhysicsEngine.EventManager.InvokeCollisionEnter(other.gameObject, collision);
+                }
+            }
+        }
+
+        protected void TriggerCollisionExit(PhysCompoundCollider other)
+        {
+            collisionSet.Remove(other);
+
+            FCollision collision = new FCollision()
+            {
+                Other = other.gameObject,
+                OtherCollider = other,
+                OtherRigidbody = other as PhysRigidbody
+            };
+
+            if (other.IsTrigger || IsTrigger)
+            {
+                PhysicsEngine.EventManager.InvokeTriggerExit(gameObject, collision);
+            }
+            else
+            {
+                PhysicsEngine.EventManager.InvokeCollisionExit(gameObject, collision);
+            }
+
+            if (!(other is PhysRigidbody))
+            {
+                other.RemoteUnregisterCollision(this);
+
+                collision = new FCollision()
+                {
+                    Other = this.gameObject,
+                    OtherCollider = this,
+                    OtherRigidbody = this
+                };
+
+                if (other.IsTrigger || IsTrigger)
+                {
+                    PhysicsEngine.EventManager.InvokeTriggerExit(other.gameObject, collision);
+                }
+                else
+                {
+                    PhysicsEngine.EventManager.InvokeCollisionExit(other.gameObject, collision);
+                }
+            }
         }
     }
 }

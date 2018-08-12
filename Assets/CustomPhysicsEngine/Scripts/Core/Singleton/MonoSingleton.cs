@@ -58,7 +58,7 @@ namespace Phys
             if (_instance == null)
             {
                 _instance = (T)this;
-                DontDestroyOnLoad(_instance.gameObject);
+                //DontDestroyOnLoad(_instance.gameObject);
 
             }
 
